@@ -1,101 +1,100 @@
-# Short Stage Balance Design
+# 짧은 스테이지 밸런스 설계
 
-## Purpose
+## 목적
 
-This document defines the initial stage balance for the Pygame grid-based game.
-The project is for coursework, so each stage should be short, readable, and easy
-to explain. The first implementation will use four fixed stages instead of
-randomly generated maps.
+이 문서는 Pygame 기반 격자형 게임의 초기 스테이지 밸런스 기준을 정의한다.
+이 프로젝트는 과제용이므로 각 스테이지는 짧고, 이해하기 쉽고, 설명하기 쉬워야
+한다. 첫 구현에서는 무작위 맵 생성 대신 4개의 고정 스테이지를 사용한다.
 
-The goal is to make each stage clearable in about 20 to 40 seconds by a player
-who understands the controls.
+목표는 조작법을 이해한 플레이어가 각 스테이지를 약 20초에서 40초 안에 클리어할
+수 있게 만드는 것이다.
 
-## Chosen Approach
+## 선택한 접근 방식
 
-Use four short fixed puzzle stages.
+4개의 짧은 고정 퍼즐형 스테이지를 사용한다.
 
-This approach keeps implementation scope small, makes difficulty easier to
-control, and gives the project a clear progression:
+이 방식은 구현 범위를 작게 유지하고, 난이도 조절을 쉽게 하며, 다음과 같은 명확한
+진행 구조를 제공한다.
 
-1. Stage 1 teaches movement and goal arrival.
-2. Stage 2 introduces bike obstacles.
-3. Stage 3 introduces lake tiles and turtle platforms.
-4. Stage 4 combines the learned elements.
+1. Stage 1은 이동과 목적지 도착을 학습시킨다.
+2. Stage 2는 자전거 장애물을 소개한다.
+3. Stage 3은 호수 타일과 거북이 발판을 소개한다.
+4. Stage 4는 앞에서 학습한 요소들을 조합한다.
 
-Random map generation is intentionally excluded from the first version because
-it would make balancing, testing, and explanation harder.
+무작위 맵 생성은 첫 버전에서 제외한다. 무작위 맵은 밸런싱, 테스트, 설명을 더
+어렵게 만들기 때문이다.
 
-## Stage Defaults
+## 스테이지 기본값
 
-Map size is written as columns x rows in this document. The implementation may
-store the same value as rows and columns in `TerrainMap`.
+이 문서에서 맵 크기는 열 x 행으로 표기한다. 구현에서는 같은 값을 `TerrainMap`의
+rows와 columns로 저장할 수 있다.
 
-| Stage | Main Goal | Map Size | Main Elements | 3 Stars | 2 Stars | 1 Star |
+| 스테이지 | 주요 목표 | 맵 크기 | 주요 요소 | 3성 | 2성 | 1성 |
 |---|---|---:|---|---:|---:|---:|
-| Stage 1 | Learn movement and goal arrival | 7x7 | 3-5 walls | 20s | 30s | 45s |
-| Stage 2 | Avoid bikes | 8x7 | 5-8 walls, 2 bikes | 25s | 38s | 55s |
-| Stage 3 | Use turtles to cross lakes | 9x7 | 8-12 lake tiles, 2 turtles | 30s | 45s | 65s |
-| Stage 4 | Combined challenge | 10x8 | 8-12 walls, 2 bikes, 1 running crew, 2 turtles | 35s | 52s | 75s |
+| Stage 1 | 이동과 목적지 도착 학습 | 7x7 | 벽 3-5개 | 20초 | 30초 | 45초 |
+| Stage 2 | 자전거 회피 | 8x7 | 벽 5-8개, 자전거 2개 | 25초 | 38초 | 55초 |
+| Stage 3 | 거북이를 이용한 호수 통과 | 9x7 | 호수 타일 8-12칸, 거북이 2개 | 30초 | 45초 | 65초 |
+| Stage 4 | 종합 난이도 | 10x8 | 벽 8-12개, 자전거 2개, 러닝크루 1개, 거북이 2개 | 35초 | 52초 | 75초 |
 
-These numbers are starting values. They should be tuned after playtesting.
+이 수치는 시작 기준이다. 실제 플레이 테스트 후 조정한다.
 
-## Map Design Rules
+## 맵 설계 규칙
 
-Each stage should have one clear intended route from START to GOAL, with small
-side spaces for dodging or waiting.
+각 스테이지에는 START에서 GOAL까지 이어지는 명확한 의도 경로가 있어야 한다.
+다만 회피하거나 기다릴 수 있는 작은 여유 공간도 함께 둔다.
 
-The minimum route length should stay short:
+최소 이동 경로 길이는 짧게 유지한다.
 
-| Stage | Target Minimum Route Length |
+| 스테이지 | 목표 최소 경로 길이 |
 |---|---:|
-| Stage 1 | 12-18 grid moves |
-| Stage 2 | 16-24 grid moves |
-| Stage 3 | 20-28 grid moves |
-| Stage 4 | 25-35 grid moves |
+| Stage 1 | 12-18칸 이동 |
+| Stage 2 | 16-24칸 이동 |
+| Stage 3 | 20-28칸 이동 |
+| Stage 4 | 25-35칸 이동 |
 
-Walls should guide the player instead of simply filling space. The first version
-should keep wall density around 10-15 percent of the map.
+벽은 단순히 공간을 채우기 위한 요소가 아니라 플레이어의 이동 방향을 유도하는
+요소로 사용한다. 첫 버전에서는 벽 밀도를 전체 맵의 약 10-15%로 유지한다.
 
-Moving obstacles should be limited:
+움직이는 장애물은 제한적으로 배치한다.
 
-1. Stage 1 has no moving obstacles.
-2. Stage 2 has two bike obstacles.
-3. Stage 3 has two turtle platforms and no bikes.
-4. Stage 4 has two bikes, one running crew event, and two turtle platforms.
+1. Stage 1에는 움직이는 장애물을 배치하지 않는다.
+2. Stage 2에는 자전거 장애물 2개를 배치한다.
+3. Stage 3에는 거북이 발판 2개를 배치하고 자전거는 배치하지 않는다.
+4. Stage 4에는 자전거 2개, 러닝크루 이벤트 1개, 거북이 발판 2개를 배치한다.
 
-The running crew should appear only in Stage 4 in the first version because it
-affects a large area and can quickly make a small map feel unfair.
+러닝크루는 첫 버전에서 Stage 4에만 등장시킨다. 러닝크루는 넓은 영역에 영향을
+주므로 작은 맵에서는 쉽게 불공정하게 느껴질 수 있기 때문이다.
 
-## Star Rating Rule
+## 별점 규칙
 
-The default star thresholds are based on a short-stage target:
+기본 별점 기준은 짧은 스테이지 목표에 맞춰 정한다.
 
-1. 3 stars: clear time for a clean run with little waiting.
-2. 2 stars: about 1.5 times the 3-star time.
-3. 1 star: about 2.2 times the 3-star time.
+1. 3성: 거의 기다리지 않고 깔끔하게 클리어했을 때의 시간
+2. 2성: 3성 기준 시간의 약 1.5배
+3. 1성: 3성 기준 시간의 약 2.2배
 
-The stage can still be cleared after the 1-star time. The star rating only
-records performance.
+1성 기준 시간을 넘겨도 스테이지 클리어는 가능하다. 별점은 클리어 성과를 기록하기
+위한 기준으로만 사용한다.
 
-## Tuning Rules
+## 조정 규칙
 
-After implementation, tune the numbers using simple playtest observations:
+구현 후에는 간단한 플레이 테스트 관찰을 기준으로 수치를 조정한다.
 
-1. If most first-time players fail before understanding the rule, reduce obstacle
-   count or increase safe space.
-2. If a stage takes more than 40 seconds on a clean run, shorten the route or
-   reduce waiting time.
-3. If players can ignore an obstacle, move it closer to the intended route.
-4. If a stage feels unfair, add one safe tile before adding more time.
-5. If 3 stars require perfect timing, increase the 3-star threshold by 3-5
-   seconds.
+1. 처음 플레이하는 사람이 규칙을 이해하기 전에 자주 실패한다면 장애물 수를
+   줄이거나 안전 공간을 늘린다.
+2. 실수 없는 클리어가 40초를 넘는다면 경로를 줄이거나 대기 시간을 줄인다.
+3. 플레이어가 장애물을 무시하고 지나갈 수 있다면 장애물을 의도 경로에 더 가깝게
+   옮긴다.
+4. 스테이지가 불공정하게 느껴진다면 시간을 먼저 늘리기보다 안전 타일을 하나
+   추가한다.
+5. 3성을 받기 위해 완벽한 타이밍이 필요하다면 3성 기준 시간을 3-5초 늘린다.
 
-## Implementation Notes
+## 구현 메모
 
-Stage data should be represented as fixed map definitions. A simple structured
-format is enough, such as a list of strings or a nested list of terrain values.
+스테이지 데이터는 고정 맵 정의로 표현한다. 문자열 리스트나 지형 값의 중첩 리스트
+같은 단순한 구조면 충분하다.
 
-The terrain model should keep using the existing documented concepts:
+지형 모델은 기존 문서에 정의된 개념을 그대로 사용한다.
 
 - LAND
 - LAKE
@@ -104,18 +103,17 @@ The terrain model should keep using the existing documented concepts:
 - START
 - GOAL
 
-Stage-specific entities such as bikes, running crews, and turtles should be
-configured separately from static terrain so that map layout and moving behavior
-remain easy to adjust independently.
+자전거, 러닝크루, 거북이 같은 스테이지별 객체는 정적 지형과 분리해서 설정한다.
+이렇게 하면 맵 배치와 움직임 규칙을 서로 독립적으로 조정하기 쉽다.
 
-## Out of Scope
+## 제외 범위
 
-The first balanced version will not include:
+첫 밸런스 버전에는 다음 기능을 포함하지 않는다.
 
-- random map generation
-- more than four stages
-- shield or item mechanics
-- character customization
-- dynamic star thresholds during play
+- 무작위 맵 생성
+- 4개를 초과하는 스테이지
+- 방패 또는 아이템 기능
+- 캐릭터 커스터마이징
+- 플레이 중 동적으로 변하는 별점 기준
 
-These can be considered after the fixed four-stage version feels complete.
+이 기능들은 고정 4스테이지 버전이 완성된 뒤에 고려한다.
