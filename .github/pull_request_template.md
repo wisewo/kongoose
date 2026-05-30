@@ -1,7 +1,7 @@
 ## 작업 내용
 -
 
-## 읽은 문서
+## AI에게 제공한 기준 문서
 - [ ] `doc/02_requirements.md`
 - [ ] `doc/06_class_diagram.md`
 - [ ] `doc/05_sequence_diagrams.md`
