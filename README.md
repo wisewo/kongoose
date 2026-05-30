@@ -31,6 +31,5 @@ python -m kongoose
 
 사람이 읽는 쉬운 작업 안내서는 Notion에 정리합니다.
 
-`doc/` 폴더의 문서는 AI에게 프로젝트 기준을 알려주기 위한 문서입니다. 팀원이 AI에게
-작업을 맡길 때는 [doc/09_ai_handoff_prompts.md](doc/09_ai_handoff_prompts.md)와 관련
-작업 문서를 함께 제공합니다.
+`doc/` 폴더의 문서는 AI에게 프로젝트 기준을 알려주기 위한 문서입니다. 팀원이 직접 읽는
+작업 안내, AI에게 붙여넣을 프롬프트, GitHub 설정 따라하기 문서는 Notion에 정리합니다.

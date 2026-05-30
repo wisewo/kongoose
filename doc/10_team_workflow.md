@@ -55,8 +55,7 @@ AI는 사용자가 맡긴 작업 패키지의 범위를 넘지 않는다.
 3. `doc/05_sequence_diagrams.md`
 4. `doc/07_stage_balance.md`
 5. `doc/08_implementation_dashboard.md`
-6. `doc/09_ai_handoff_prompts.md`
-7. `doc/10_team_workflow.md`
+6. `doc/10_team_workflow.md`
 
 GitHub 저장소 연결이나 PR 설정을 돕는 경우에는 `doc/11_github_setup_checklist.md`도 읽는다.
 
@@ -144,8 +143,16 @@ AI는 아래처럼 말하지 않는다.
 
 전문 용어가 필요하면 쉬운 뜻을 바로 붙인다.
 
-## 사람이 읽을 문서의 위치
+## 사람용 문서의 위치
 
-팀원이 처음 읽는 안내서는 Notion에 둔다. AI는 `doc/` 폴더 문서를 사람용 안내서처럼
-그대로 읽으라고만 하지 말고, 필요한 부분을 쉬운 말로 요약하거나 Notion 문서를 보라고
-안내한다.
+팀원이 직접 읽는 안내서는 Notion에 둔다. 여기에는 다음 내용을 포함한다.
+
+- 처음 작업을 시작하는 방법
+- AI에게 붙여넣을 작업 프롬프트
+- PR 작성 방법
+- GitHub 저장소 설정 따라하기
+- 자주 막히는 상황별 질문 예시
+
+AI는 `doc/` 폴더 문서를 사람에게 그대로 읽으라고 하지 않는다. 대신 `doc/`의 기준을
+바탕으로 필요한 부분을 쉬운 말로 요약하거나, 사람이 읽어야 하는 내용은 Notion 문서를
+보라고 안내한다.
