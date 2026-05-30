@@ -1,0 +1,1 @@
+"""Kongoose game package."""
