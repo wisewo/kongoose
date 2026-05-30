@@ -9,8 +9,8 @@ def test_required_team_documents_exist() -> None:
         ROOT / "doc" / "06_class_diagram.md",
         ROOT / "doc" / "05_sequence_diagrams.md",
         ROOT / "doc" / "07_stage_balance.md",
-        ROOT / "doc" / "10_team_workflow.md",
-        ROOT / "doc" / "11_github_setup_checklist.md",
+        ROOT / "doc" / "09_team_workflow.md",
+        ROOT / "doc" / "10_github_setup_checklist.md",
     ]
 
     missing_paths = [path for path in required_paths if not path.exists()]

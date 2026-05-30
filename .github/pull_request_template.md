@@ -6,7 +6,7 @@
 - [ ] `doc/06_class_diagram.md`
 - [ ] `doc/05_sequence_diagrams.md`
 - [ ] `doc/07_stage_balance.md`
-- [ ] `doc/10_team_workflow.md`
+- [ ] `doc/09_team_workflow.md`
 
 ## 테스트
 - [ ] `python -m pytest`

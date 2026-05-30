@@ -4,6 +4,8 @@
 
 ## 처음 받은 뒤 실행 준비
 
+처음 GitHub 에서 코드를 다운 받으면 아래 명령어를 실행합니다.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -13,7 +15,7 @@ python -m pip install -r requirements.txt
 
 ## 로컬 확인 명령
 
-PR을 올리기 전에 아래 명령을 실행합니다.
+PR을 올리기 전에 프로젝트 폴더에서 아래 명령을 실행합니다.
 
 ```powershell
 python -m pytest

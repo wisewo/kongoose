@@ -12,7 +12,7 @@ AI는 이 문서를 읽고 팀원에게 답할 때, 규칙을 그대로 나열�
 ## 팀원 전제
 
 - 팀은 5인 팀이다.
-- 팀원 대부분은 컴퓨터공학 전공자가 아닌 1학년 공대생이다.
+- 팀원 대부분은 컴퓨터공학 전공자가 아닌 2학년 공대생이다.
 - 팀원은 AI를 사용하지만, AI Agent나 자동화 도구를 쓴다는 보장은 없다.
 - Git, Pull Request, CI, pytest, ruff를 처음 볼 수 있다.
 
@@ -55,9 +55,9 @@ AI는 사용자가 맡긴 작업 패키지의 범위를 넘지 않는다.
 3. `doc/05_sequence_diagrams.md`
 4. `doc/07_stage_balance.md`
 5. `doc/08_implementation_dashboard.md`
-6. `doc/10_team_workflow.md`
+6. `doc/09_team_workflow.md`
 
-GitHub 저장소 연결이나 PR 설정을 돕는 경우에는 `doc/11_github_setup_checklist.md`도 읽는다.
+GitHub 저장소 연결이나 PR 설정을 돕는 경우에는 `doc/10_github_setup_checklist.md`도 읽는다.
 
 ## 테스트와 검증 규칙
 
@@ -110,7 +110,7 @@ AI는 팀원이 PR을 만들 때 아래 형식을 채우도록 도와야 한다.
 - [ ] doc/06_class_diagram.md
 - [ ] doc/05_sequence_diagrams.md
 - [ ] doc/07_stage_balance.md
-- [ ] doc/10_team_workflow.md
+- [ ] doc/09_team_workflow.md
 
 ## 테스트
 - [ ] python -m pytest
