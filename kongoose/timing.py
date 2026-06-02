@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+
+
+class Timer:
+    def __init__(self, clock: Callable[[], float] | None = None) -> None:
+        self._clock = clock or time.perf_counter
+        self._start_time: float | None = None
+        self._elapsed_time = 0.0
+
+    def start(self) -> None:
+        if self._start_time is None:
+            self._start_time = self._clock()
+
+    def stop(self) -> None:
+        if self._start_time is not None:
+            self._elapsed_time += self._clock() - self._start_time
+            self._start_time = None
+
+    def reset(self) -> None:
+        self._start_time = None
+        self._elapsed_time = 0.0
+
+    def get_elapsed_time(self) -> float:
+        if self._start_time is None:
+            return self._elapsed_time
+        return self._elapsed_time + self._clock() - self._start_time
+
+
+class StarRating:
+    _THRESHOLDS = {
+        1: (20.0, 30.0, 45.0),
+        2: (25.0, 38.0, 55.0),
+        3: (30.0, 45.0, 65.0),
+        4: (35.0, 52.0, 75.0),
+    }
+
+    @classmethod
+    def calculate(cls, clear_time: float, stage_id: int) -> int:
+        if clear_time < 0:
+            raise ValueError("clear_time must not be negative")
+        if stage_id not in cls._THRESHOLDS:
+            raise ValueError("unknown stage_id")
+
+        three_star_time, two_star_time, _one_star_time = cls._THRESHOLDS[stage_id]
+        if clear_time <= three_star_time:
+            return 3
+        if clear_time <= two_star_time:
+            return 2
+        return 1

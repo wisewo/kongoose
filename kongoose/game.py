@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from kongoose.models import Direction, FailureReason
+from kongoose.resources import ResourceManager, SoundManager
 from kongoose.scenes import MainScene, Scene
+from kongoose.storage import SaveManager
+from kongoose.timing import Timer
 
 
 class Game:
@@ -21,11 +24,11 @@ class Game:
         self.current_scene: Scene | None = None
         self.stages: dict[int, Any] = {}
         self.current_stage: Any | None = None
-        self.progress: Any | None = None
-        self.timer: Any | None = None
-        self.save_manager: Any | None = None
-        self.sound_manager: Any | None = None
-        self.resource_manager: Any | None = None
+        self.save_manager = SaveManager()
+        self.progress = self.save_manager.load_progress()
+        self.timer = Timer()
+        self.sound_manager = SoundManager()
+        self.resource_manager = ResourceManager()
 
         if initial_scene is not None:
             self.change_scene(initial_scene)
