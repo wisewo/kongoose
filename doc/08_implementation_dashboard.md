@@ -40,7 +40,7 @@
 | A | 화면/Scene | `MainScene`, `StageSelectScene`, `PlayingScene`, `FailedScene`, `ResultScene` | CORE | 주요 화면 전환과 입력 처리가 가능함 | Todo |
 | B | 지형/이동 | `Position`, `TerrainType`, `TerrainMap`, `Player`, `Stage.move_player()` | CORE | 벽/범위 판정과 한 칸 이동이 동작함 | Todo |
 | C | 장애물/판정 | `GameSprite`, `Bike`, `RunningCrew`, `Turtle`, `Stage.update()`, `evaluate_player_state()` | B | 충돌, 호수 추락, 자라 탑승, 경고 판정이 동작함 | Todo |
-| D | 진행/리소스 | `Progress`, `SaveManager`, `Timer`, `StarRating`, `SoundManager`, `ResourceManager` | CORE | 저장/불러오기, 별점 계산, 사운드/리소스 조회가 동작함 | Todo |
+| D | 진행/리소스 | `Progress`, `SaveManager`, `Timer`, `StarRating`, `SoundManager`, `ResourceManager` | CORE | 저장/불러오기, 별점 계산, 사운드/리소스 조회가 동작함 | Done |
 | INT | 통합/플레이 조정 | 전체 모듈 | A, B, C, D | 4개 스테이지를 처음부터 끝까지 플레이 가능함 | Todo |
 
 ## 통합 순서

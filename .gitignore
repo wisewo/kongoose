@@ -151,6 +151,7 @@ activemq-data/
 .env
 .envrc
 .venv
+.codex_deps/
 env/
 venv/
 ENV/
