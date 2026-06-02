@@ -119,6 +119,7 @@ class Stage:
         if not self.terrain_map.can_enter(target_position):
             return MoveResult.blocked()
         self.player.move_to(target_position)
+        self.player.leave_turtle()
         return self.evaluate_player_state()
 
     def update(self, dt: float) -> StageUpdateResult:

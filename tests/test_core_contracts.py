@@ -6,7 +6,7 @@ from kongoose.game import Game
 from kongoose.models import Direction, FailureReason, Position, TerrainType
 from kongoose.results import MoveResult, MoveResultType, StageUpdateResult
 from kongoose.scenes import Scene
-from kongoose.stage import Player, Stage
+from kongoose.stage import Player, Stage, Turtle
 from kongoose.terrain import TerrainMap
 
 
@@ -162,3 +162,23 @@ def test_stage_reports_lake_failure_without_turtle() -> None:
     assert result.is_failed()
     assert result.get_failure_reason() is FailureReason.FELL_IN_LAKE
     assert stage.player.position == Position(row=0, column=1)
+
+
+def test_stage_manual_move_leaves_mounted_turtle() -> None:
+    turtle = Turtle(position=Position(row=0, column=0))
+    stage = Stage(
+        terrain_map=TerrainMap(
+            [
+                [TerrainType.START, TerrainType.LAND],
+            ]
+        ),
+        player=Player(Position(row=0, column=0)),
+        turtles=[turtle],
+    )
+    stage.player.ride_turtle(turtle)
+
+    result = stage.move_player(Direction.RIGHT)
+
+    assert result.is_moved()
+    assert stage.player.position == Position(row=0, column=1)
+    assert stage.player.mounted_turtle is None
