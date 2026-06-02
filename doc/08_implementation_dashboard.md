@@ -36,8 +36,8 @@
 
 | ID | 담당 범위 | 주요 클래스/모듈 | 의존성 | 완료 기준 | 상태 |
 |---|---|---|---|---|---|
-| CORE | 공통 골격과 계약 | `Game`, `Scene`, 공통 enum/result 객체, 실행 진입점 | 없음 | 빈 화면이라도 실행되고 Scene 전환 계약이 고정됨 | Todo |
-| A | 화면/Scene | `MainScene`, `StageSelectScene`, `PlayingScene`, `FailedScene`, `ResultScene` | CORE | 주요 화면 전환과 입력 처리가 가능함 | Todo |
+| CORE | 공통 골격과 계약 | `Game`, `Scene`, 공통 enum/result 객체, 실행 진입점 | 없음 | 빈 화면이라도 실행되고 Scene 전환 계약이 고정됨 | Done |
+| A | 화면/Scene | `MainScene`, `StageSelectScene`, `PlayingScene`, `FailedScene`, `ResultScene` | CORE | 주요 화면 전환과 입력 처리가 가능함 | Done |
 | B | 지형/이동 | `Position`, `TerrainType`, `TerrainMap`, `Player`, `Stage.move_player()` | CORE | 벽/범위 판정과 한 칸 이동이 동작함 | Done |
 | C | 장애물/판정 | `GameSprite`, `Bike`, `RunningCrew`, `Turtle`, `Stage.update()`, `evaluate_player_state()` | B | 충돌, 호수 추락, 자라 탑승, 경고 판정이 동작함 | Done |
 | D | 진행/리소스 | `Progress`, `SaveManager`, `Timer`, `StarRating`, `SoundManager`, `ResourceManager` | CORE | 저장/불러오기, 별점 계산, 사운드/리소스 조회가 동작함 | Done |
