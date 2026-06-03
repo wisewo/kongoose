@@ -194,3 +194,65 @@ def test_stage_update_keeps_turtle_inside_lake_segment() -> None:
     )
     for position in turtle.positions:
         assert stage.terrain_map.get_terrain(position) is TerrainType.LAKE
+
+
+def test_initialize_restores_dynamic_sprite_positions_and_progress() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.LAKE, TerrainType.LAKE, TerrainType.LAKE]],
+        Position(row=0, column=0),
+    )
+    bike = Bike(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.5,
+    )
+    turtle = Turtle(
+        position=Position(row=0, column=1),
+        direction=Direction.RIGHT,
+        speed=1.5,
+        length=2,
+    )
+    stage.bikes.append(bike)
+    stage.turtles.append(turtle)
+
+    bike.update(1.0)
+    turtle.update(1.0)
+    stage.initialize()
+
+    assert bike.position == Position(row=0, column=0)
+    assert bike._distance_progress == 0.0
+    assert turtle.position == Position(row=0, column=1)
+    assert turtle._distance_progress == 0.0
+    assert turtle.positions == (
+        Position(row=0, column=1),
+        Position(row=0, column=2),
+    )
+
+
+def test_initialize_resets_running_crew_elapsed_time() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]],
+        Position(row=0, column=1),
+    )
+    crew = RunningCrew(row=0, columns=3, warning_time=0.5, active_duration=1.0)
+    stage.running_crews.append(crew)
+
+    crew.update(0.75)
+    stage.initialize()
+
+    assert crew.elapsed_time == 0.0
+    assert crew.should_warn()
+
+
+def test_initialize_dismounts_player_from_turtle() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.LAKE]],
+        Position(row=0, column=1),
+    )
+    turtle = Turtle(position=Position(row=0, column=1))
+    stage.turtles.append(turtle)
+    stage.player.ride_turtle(turtle)
+
+    stage.initialize()
+
+    assert stage.player.mounted_turtle is None
