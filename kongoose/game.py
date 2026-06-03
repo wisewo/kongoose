@@ -12,6 +12,8 @@ from kongoose.scenes import (
     Scene,
     StageSelectScene,
 )
+from kongoose.stage import Stage
+from kongoose.stage_catalog import build_default_stages
 from kongoose.storage import SaveManager
 from kongoose.timing import StarRating, Timer
 
@@ -24,6 +26,7 @@ class Game:
         window_size: tuple[int, int] = (960, 720),
         title: str = "Kongoose",
         initial_scene: Scene | None = None,
+        stages: dict[int, Stage] | None = None,
     ) -> None:
         self.window_size = window_size
         self.title = title
@@ -31,8 +34,8 @@ class Game:
         self.clock: Any | None = None
         self.running = False
         self.current_scene: Scene | None = None
-        self.stages: dict[int, Any] = {}
-        self.current_stage: Any | None = None
+        self.stages = dict(stages) if stages is not None else build_default_stages()
+        self.current_stage: Stage | None = None
         self.save_manager = SaveManager()
         self.progress = self.save_manager.load_progress()
         self.timer = Timer()
@@ -85,8 +88,8 @@ class Game:
     def quit_game(self) -> None:
         self.running = False
 
-    def get_stage_list(self) -> list[Any]:
-        return list(self.stages.values())
+    def get_stage_list(self) -> list[Stage]:
+        return [self.stages[stage_id] for stage_id in sorted(self.stages)]
 
     def open_stage_select(self) -> None:
         self.change_scene(StageSelectScene())
