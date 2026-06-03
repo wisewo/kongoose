@@ -7,7 +7,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 
 from kongoose.game import Game
-from kongoose.models import Direction, FailureReason
+from kongoose.models import Direction, FailureReason, Position, TerrainType
 from kongoose.results import MoveResult, StageUpdateResult
 from kongoose.scenes import (
     FailedScene,
@@ -16,6 +16,8 @@ from kongoose.scenes import (
     ResultScene,
     StageSelectScene,
 )
+from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
+from kongoose.terrain import TerrainMap
 
 
 class ProgressStub:
@@ -85,6 +87,18 @@ def key_event(key: int) -> pygame.event.Event:
     return pygame.event.Event(pygame.KEYDOWN, key=key)
 
 
+def collect_surface_colors(surface: pygame.Surface) -> set[tuple[int, int, int]]:
+    pixels = pygame.PixelArray(surface)
+    try:
+        return {
+            surface.unmap_rgb(pixels[x, y])[:3]
+            for x in range(surface.get_width())
+            for y in range(surface.get_height())
+        }
+    finally:
+        del pixels
+
+
 def test_main_scene_opens_stage_select_and_quits_from_keys() -> None:
     game = Game(initial_scene=MainScene())
 
@@ -136,6 +150,65 @@ def test_playing_scene_moves_player_updates_stage_and_returns_to_select() -> Non
     game.current_scene.handle_event(key_event(pygame.K_ESCAPE))
 
     assert isinstance(game.current_scene, StageSelectScene)
+
+
+def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((420, 320))
+    stage = Stage(
+        terrain_map=TerrainMap(
+            [
+                [
+                    TerrainType.START,
+                    TerrainType.LAND,
+                    TerrainType.SAFE,
+                    TerrainType.LAKE,
+                    TerrainType.WALL,
+                    TerrainType.GOAL,
+                ],
+                [
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                ],
+            ]
+        ),
+        player=Player(Position(row=0, column=1)),
+        bikes=[Bike(position=Position(row=0, column=2))],
+        running_crews=[
+            RunningCrew(
+                row=1,
+                columns=6,
+                warning_time=0.0,
+                active_duration=10.0,
+                elapsed_time=1.0,
+            )
+        ],
+        turtles=[Turtle(position=Position(row=0, column=3), length=2)],
+    )
+    game = Game(initial_scene=PlayingScene())
+    game.current_stage = stage
+    game.current_stage_id = 1
+
+    game.current_scene.draw(surface)
+    rendered_colors = collect_surface_colors(surface)
+
+    for expected_color in [
+        (176, 224, 166),
+        (231, 222, 178),
+        (205, 234, 198),
+        (80, 155, 210),
+        (92, 96, 105),
+        (245, 205, 92),
+        (240, 142, 74),
+        (210, 66, 70),
+        (146, 80, 170),
+        (72, 170, 120),
+    ]:
+        assert expected_color in rendered_colors
 
 
 def test_playing_scene_changes_to_failed_or_result_for_stage_outcomes() -> None:
