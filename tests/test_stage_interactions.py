@@ -128,3 +128,69 @@ def test_player_fails_when_turtle_carries_them_off_screen() -> None:
 
     assert result.is_failure()
     assert result.get_failure_reason() is FailureReason.CARRIED_OFF_SCREEN
+
+
+def test_stage_update_wraps_bike_that_moves_past_right_edge() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]],
+        Position(row=0, column=0),
+    )
+    bike = Bike(
+        position=Position(row=0, column=2),
+        direction=Direction.RIGHT,
+        speed=1.0,
+    )
+    stage.bikes.append(bike)
+
+    stage.update(1.0)
+
+    assert bike.position == Position(row=0, column=0)
+
+
+def test_stage_update_wraps_bike_that_moves_past_left_edge() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]],
+        Position(row=0, column=1),
+    )
+    bike = Bike(
+        position=Position(row=0, column=0),
+        direction=Direction.LEFT,
+        speed=1.0,
+    )
+    stage.bikes.append(bike)
+
+    stage.update(1.0)
+
+    assert bike.position == Position(row=0, column=2)
+
+
+def test_stage_update_keeps_turtle_inside_lake_segment() -> None:
+    stage = make_stage(
+        [
+            [
+                TerrainType.START,
+                TerrainType.LAND,
+                TerrainType.LAKE,
+                TerrainType.LAKE,
+                TerrainType.LAKE,
+                TerrainType.LAND,
+            ],
+        ],
+        Position(row=0, column=0),
+    )
+    turtle = Turtle(
+        position=Position(row=0, column=3),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        length=2,
+    )
+    stage.turtles.append(turtle)
+
+    stage.update(1.0)
+
+    assert turtle.positions == (
+        Position(row=0, column=2),
+        Position(row=0, column=3),
+    )
+    for position in turtle.positions:
+        assert stage.terrain_map.get_terrain(position) is TerrainType.LAKE
