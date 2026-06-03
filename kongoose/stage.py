@@ -13,6 +13,22 @@ class GameSprite:
     direction: Direction = Direction.RIGHT
     speed: float = 0.0
     _distance_progress: float = 0.0
+    _initial_position: Position = field(init=False, repr=False)
+    _initial_direction: Direction = field(init=False, repr=False)
+    _initial_speed: float = field(init=False, repr=False)
+    _initial_distance_progress: float = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._initial_position = self.position
+        self._initial_direction = self.direction
+        self._initial_speed = self.speed
+        self._initial_distance_progress = self._distance_progress
+
+    def reset(self) -> None:
+        self.position = self._initial_position
+        self.direction = self._initial_direction
+        self.speed = self._initial_speed
+        self._distance_progress = self._initial_distance_progress
 
     def update(self, dt: float) -> None:
         if self.speed <= 0:
@@ -50,6 +66,9 @@ class RunningCrew:
 
     def update(self, dt: float) -> None:
         self.elapsed_time += dt
+
+    def reset(self) -> None:
+        self.elapsed_time = 0.0
 
     def should_warn(self) -> bool:
         return self.elapsed_time < self.warning_time
@@ -113,6 +132,10 @@ class Stage:
 
     def initialize(self) -> None:
         self.player.leave_turtle()
+        for sprite in [*self.bikes, *self.turtles]:
+            sprite.reset()
+        for crew in self.running_crews:
+            crew.reset()
 
     def move_player(self, direction: Direction) -> MoveResult:
         target_position = self.player.position.moved(direction)
