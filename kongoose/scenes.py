@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from kongoose.models import Direction
+from kongoose.models import Direction, Position, TerrainType
 
 if TYPE_CHECKING:
     from kongoose.game import Game
@@ -13,6 +13,28 @@ MAX_STAGE_COUNT = 4
 TEXT_COLOR = (35, 45, 50)
 MUTED_TEXT_COLOR = (95, 106, 112)
 MESSAGE_COLOR = (172, 72, 39)
+GRID_LINE_COLOR = (73, 83, 90)
+TERRAIN_COLORS = {
+    TerrainType.START: (176, 224, 166),
+    TerrainType.LAND: (231, 222, 178),
+    TerrainType.SAFE: (205, 234, 198),
+    TerrainType.LAKE: (80, 155, 210),
+    TerrainType.WALL: (92, 96, 105),
+    TerrainType.GOAL: (245, 205, 92),
+}
+TERRAIN_LABELS = {
+    TerrainType.START: "S",
+    TerrainType.LAND: "",
+    TerrainType.SAFE: "",
+    TerrainType.LAKE: "LAKE",
+    TerrainType.WALL: "WALL",
+    TerrainType.GOAL: "GOAL",
+}
+PLAYER_COLOR = (240, 142, 74)
+BIKE_COLOR = (210, 66, 70)
+RUNNING_CREW_COLOR = (146, 80, 170)
+TURTLE_COLOR = (72, 170, 120)
+ACTOR_TEXT_COLOR = (255, 255, 255)
 
 
 class Scene(ABC):
@@ -195,6 +217,8 @@ class PlayingScene(EmptyScene):
         self._require_game().update_stage(dt)
 
     def draw(self, surface: Any) -> None:
+        import pygame
+
         game = self._require_game()
         stage_id = getattr(game, "current_stage_id", None)
         stage_text = "-" if stage_id is None else str(stage_id)
@@ -204,16 +228,240 @@ class PlayingScene(EmptyScene):
         if play_message:
             self.set_message(play_message)
 
-        self._draw_text_screen(
+        stage = getattr(game, "current_stage", None)
+        terrain_map = getattr(stage, "terrain_map", None)
+        player = getattr(stage, "player", None)
+        if terrain_map is None or player is None:
+            self._draw_text_screen(
+                surface,
+                "Playing",
+                [
+                    f"Current stage: {stage_text}",
+                    f"Elapsed time: {elapsed_text}",
+                    "",
+                    "Arrow keys: Move one tile",
+                    "Esc / B: Stage Select",
+                ],
+            )
+            return
+
+        surface.fill(self._background_color)
+        width, height = surface.get_size()
+        title_font = pygame.font.Font(None, 44)
+        body_font = pygame.font.Font(None, 26)
+        small_font = pygame.font.Font(None, 20)
+
+        self._draw_playing_hud(
             surface,
-            "Playing",
-            [
-                f"Current stage: {stage_text}",
-                f"Elapsed time: {elapsed_text}",
-                "",
-                "Arrow keys: Move one tile",
-                "Esc / B: Stage Select",
-            ],
+            title_font,
+            body_font,
+            stage_text,
+            elapsed_text,
+            play_message,
+        )
+
+        grid_rect, cell_size = self._calculate_grid_layout(
+            width,
+            height,
+            terrain_map.rows,
+            terrain_map.columns,
+        )
+        self._draw_terrain_grid(surface, terrain_map, grid_rect, cell_size, small_font)
+        self._draw_running_crews(
+            surface,
+            getattr(stage, "running_crews", []),
+            terrain_map,
+            grid_rect,
+            cell_size,
+            small_font,
+        )
+        self._draw_position_sprites(
+            surface,
+            getattr(stage, "turtles", []),
+            grid_rect,
+            cell_size,
+            TURTLE_COLOR,
+            "T",
+            small_font,
+        )
+        self._draw_position_sprites(
+            surface,
+            getattr(stage, "bikes", []),
+            grid_rect,
+            cell_size,
+            BIKE_COLOR,
+            "B",
+            small_font,
+        )
+        self._draw_player(surface, player, grid_rect, cell_size, small_font)
+
+    def _draw_playing_hud(
+        self,
+        surface: Any,
+        title_font: Any,
+        body_font: Any,
+        stage_text: str,
+        elapsed_text: str,
+        play_message: str,
+    ) -> None:
+        title_image = title_font.render("Playing", True, TEXT_COLOR)
+        surface.blit(title_image, (36, 24))
+
+        status_text = (
+            f"Current stage: {stage_text}   Elapsed time: {elapsed_text}   "
+            "Arrow keys: Move one tile   Esc / B: Stage Select"
+        )
+        status_image = body_font.render(status_text, True, TEXT_COLOR)
+        surface.blit(status_image, (38, 72))
+
+        if play_message:
+            message_image = body_font.render(play_message, True, MESSAGE_COLOR)
+            surface.blit(message_image, (38, 102))
+
+    def _calculate_grid_layout(
+        self,
+        surface_width: int,
+        surface_height: int,
+        rows: int,
+        columns: int,
+    ) -> tuple[Any, int]:
+        import pygame
+
+        top_margin = 140
+        side_margin = 40
+        bottom_margin = 32
+        available_width = surface_width - side_margin * 2
+        available_height = surface_height - top_margin - bottom_margin
+        cell_size = max(16, min(available_width // columns, available_height // rows))
+        grid_width = cell_size * columns
+        grid_height = cell_size * rows
+        left = (surface_width - grid_width) // 2
+        top = top_margin + max(0, (available_height - grid_height) // 2)
+        return pygame.Rect(left, top, grid_width, grid_height), cell_size
+
+    def _draw_terrain_grid(
+        self,
+        surface: Any,
+        terrain_map: Any,
+        grid_rect: Any,
+        cell_size: int,
+        font: Any,
+    ) -> None:
+        import pygame
+
+        for row in range(terrain_map.rows):
+            for column in range(terrain_map.columns):
+                position = Position(row=row, column=column)
+                terrain = terrain_map.get_terrain(position)
+                rect = self._cell_rect(grid_rect, cell_size, position)
+                pygame.draw.rect(surface, TERRAIN_COLORS[terrain], rect)
+                pygame.draw.rect(surface, GRID_LINE_COLOR, rect, 1)
+                self._draw_centered_label(
+                    surface,
+                    rect,
+                    TERRAIN_LABELS[terrain],
+                    font,
+                    TEXT_COLOR,
+                )
+
+    def _draw_running_crews(
+        self,
+        surface: Any,
+        running_crews: list[Any],
+        terrain_map: Any,
+        grid_rect: Any,
+        cell_size: int,
+        font: Any,
+    ) -> None:
+        import pygame
+
+        for crew in running_crews:
+            for column in range(terrain_map.columns):
+                position = Position(row=crew.row, column=column)
+                if not self._is_in_terrain(position, terrain_map):
+                    continue
+                rect = self._cell_rect(grid_rect, cell_size, position).inflate(
+                    -cell_size * 0.22,
+                    -cell_size * 0.34,
+                )
+                if crew.occupies(position):
+                    pygame.draw.rect(surface, RUNNING_CREW_COLOR, rect, border_radius=4)
+                    self._draw_centered_label(
+                        surface,
+                        rect,
+                        "R",
+                        font,
+                        ACTOR_TEXT_COLOR,
+                    )
+                elif crew.should_warn():
+                    pygame.draw.rect(surface, RUNNING_CREW_COLOR, rect, 2, 4)
+
+    def _draw_position_sprites(
+        self,
+        surface: Any,
+        sprites: list[Any],
+        grid_rect: Any,
+        cell_size: int,
+        color: tuple[int, int, int],
+        label: str,
+        font: Any,
+    ) -> None:
+        import pygame
+
+        for sprite in sprites:
+            for position in getattr(sprite, "positions", ()):
+                rect = self._cell_rect(grid_rect, cell_size, position).inflate(
+                    -cell_size * 0.24,
+                    -cell_size * 0.24,
+                )
+                pygame.draw.ellipse(surface, color, rect)
+                self._draw_centered_label(surface, rect, label, font, ACTOR_TEXT_COLOR)
+
+    def _draw_player(
+        self,
+        surface: Any,
+        player: Any,
+        grid_rect: Any,
+        cell_size: int,
+        font: Any,
+    ) -> None:
+        import pygame
+
+        rect = self._cell_rect(grid_rect, cell_size, player.position).inflate(
+            -cell_size * 0.18,
+            -cell_size * 0.18,
+        )
+        pygame.draw.rect(surface, PLAYER_COLOR, rect, border_radius=8)
+        self._draw_centered_label(surface, rect, "P", font, ACTOR_TEXT_COLOR)
+
+    def _cell_rect(self, grid_rect: Any, cell_size: int, position: Position) -> Any:
+        import pygame
+
+        return pygame.Rect(
+            grid_rect.left + position.column * cell_size,
+            grid_rect.top + position.row * cell_size,
+            cell_size,
+            cell_size,
+        )
+
+    def _draw_centered_label(
+        self,
+        surface: Any,
+        rect: Any,
+        text: str,
+        font: Any,
+        color: tuple[int, int, int],
+    ) -> None:
+        if not text:
+            return
+        label_image = font.render(text, True, color)
+        label_rect = label_image.get_rect(center=rect.center)
+        surface.blit(label_image, label_rect)
+
+    def _is_in_terrain(self, position: Position, terrain_map: Any) -> bool:
+        return (
+            0 <= position.row < terrain_map.rows
+            and 0 <= position.column < terrain_map.columns
         )
 
 
