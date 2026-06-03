@@ -13,6 +13,22 @@ class GameSprite:
     direction: Direction = Direction.RIGHT
     speed: float = 0.0
     _distance_progress: float = 0.0
+    _initial_position: Position = field(init=False, repr=False)
+    _initial_direction: Direction = field(init=False, repr=False)
+    _initial_speed: float = field(init=False, repr=False)
+    _initial_distance_progress: float = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._initial_position = self.position
+        self._initial_direction = self.direction
+        self._initial_speed = self.speed
+        self._initial_distance_progress = self._distance_progress
+
+    def reset(self) -> None:
+        self.position = self._initial_position
+        self.direction = self._initial_direction
+        self.speed = self._initial_speed
+        self._distance_progress = self._initial_distance_progress
 
     def update(self, dt: float) -> None:
         if self.speed <= 0:
@@ -50,6 +66,9 @@ class RunningCrew:
 
     def update(self, dt: float) -> None:
         self.elapsed_time += dt
+
+    def reset(self) -> None:
+        self.elapsed_time = 0.0
 
     def should_warn(self) -> bool:
         return self.elapsed_time < self.warning_time
@@ -113,6 +132,10 @@ class Stage:
 
     def initialize(self) -> None:
         self.player.leave_turtle()
+        for sprite in [*self.bikes, *self.turtles]:
+            sprite.reset()
+        for crew in self.running_crews:
+            crew.reset()
 
     def move_player(self, direction: Direction) -> MoveResult:
         target_position = self.player.position.moved(direction)
@@ -125,6 +148,7 @@ class Stage:
     def update(self, dt: float) -> StageUpdateResult:
         for sprite in [*self.bikes, *self.running_crews, *self.turtles]:
             sprite.update(dt)
+        self._keep_bikes_in_bounds()
 
         move_result = self.evaluate_player_state()
         if move_result.is_failed():
@@ -132,6 +156,10 @@ class Stage:
             if failure_reason is None:
                 raise ValueError("failed move result must include a failure reason")
             return StageUpdateResult.failure(failure_reason)
+
+        self._keep_turtles_in_lake_segments()
+        if self.player.mounted_turtle is not None:
+            self.player.move_with(self.player.mounted_turtle)
 
         if any(crew.should_warn() for crew in self.running_crews):
             return StageUpdateResult.warning()
@@ -190,3 +218,67 @@ class Stage:
             (turtle for turtle in self.turtles if turtle.occupies(position)),
             None,
         )
+
+    def _keep_bikes_in_bounds(self) -> None:
+        for bike in self.bikes:
+            bike.position = Position(
+                row=bike.position.row,
+                column=bike.position.column % self.terrain_map.columns,
+            )
+
+    def _keep_turtles_in_lake_segments(self) -> None:
+        for turtle in self.turtles:
+            self._keep_turtle_in_lake_segment(turtle)
+
+    def _keep_turtle_in_lake_segment(self, turtle: Turtle) -> None:
+        lake_segment = self._lake_segment_for_turtle(turtle)
+        if lake_segment is None:
+            return
+
+        segment_start, segment_end = lake_segment
+        max_start = segment_end - turtle.length + 1
+        if max_start < segment_start:
+            return
+
+        valid_start_count = max_start - segment_start + 1
+        column = segment_start + (
+            (turtle.position.column - segment_start) % valid_start_count
+        )
+        turtle.position = Position(row=turtle.position.row, column=column)
+
+    def _lake_segment_for_turtle(self, turtle: Turtle) -> tuple[int, int] | None:
+        if not 0 <= turtle.position.row < self.terrain_map.rows:
+            return None
+
+        segments = self._lake_segments_on_row(turtle.position.row)
+        if not segments:
+            return None
+
+        return min(
+            segments,
+            key=lambda segment: (
+                0
+                if segment[0] <= turtle.position.column <= segment[1]
+                else min(
+                    abs(turtle.position.column - segment[0]),
+                    abs(turtle.position.column - segment[1]),
+                )
+            ),
+        )
+
+    def _lake_segments_on_row(self, row: int) -> list[tuple[int, int]]:
+        segments: list[tuple[int, int]] = []
+        segment_start: int | None = None
+
+        for column in range(self.terrain_map.columns):
+            terrain = self.terrain_map.get_terrain(Position(row=row, column=column))
+            if terrain is TerrainType.LAKE and segment_start is None:
+                segment_start = column
+            elif terrain is not TerrainType.LAKE and segment_start is not None:
+                segments.append((segment_start, column - 1))
+                segment_start = None
+
+        if segment_start is not None:
+            segments.append((segment_start, self.terrain_map.columns - 1))
+
+        return segments

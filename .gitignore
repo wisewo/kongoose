@@ -227,6 +227,7 @@ Thumbs.db
 # Local runtime files
 save_data.json
 AI_ISSUE_LOG.md
+docs/superpowers/
 *.tmp
 
 .superpowers/*
