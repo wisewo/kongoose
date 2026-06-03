@@ -109,7 +109,7 @@ sequenceDiagram
         System-->>Player: 현재 게임 화면 갱신
     else 이동 가능한 위치
         Note over System: 플레이어를 한 칸 이동
-        Note over System: 같은 판정 규칙으로 장애물, 발판, 호수, 목적지 판정
+        Note over System: 같은 판정 규칙으로 장애물, 발판, 강, 목적지 판정
 
         alt 목적지 도착
             Note over System: 클리어 시간과 별점 계산

@@ -228,3 +228,5 @@ Thumbs.db
 save_data.json
 AI_ISSUE_LOG.md
 *.tmp
+
+.superpowers/*
