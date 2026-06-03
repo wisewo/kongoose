@@ -7,7 +7,8 @@
 - Actor에서 `Game`으로 향하는 첫 메시지는 SSD의 시스템 오퍼레이션을 그대로 사용한다.
 - 이후 객체 간 메시지는 Class Diagram의 책임과 PEP 8 명명 규칙을 따른다.
 - 별도 `ScreenManager`는 두지 않고, 화면별 `Scene.draw(surface)`가 사용자에게 보이는 화면을 그린다.
-- `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 호수 칸은 `can_enter(position)`에서 막지 않는다.
+- 게임 진행 화면의 2.5D 표현은 `PlayingScene.draw(surface)`에서 2D row/column 좌표를 얕은 등각 투영 화면 좌표로 변환해 표시하는 렌더링 책임이다. 이 표현은 `Stage`의 이동, 충돌, 실패, 클리어 판정 흐름을 바꾸지 않는다.
+- `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 강 칸은 `can_enter(position)`에서 막지 않는다.
 - `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다. 같은 판정 규칙은 플레이어 이동 직후와 `Stage.update(dt)` 직후에 모두 적용한다.
 - `Goal` 클래스는 사용하지 않고 `TerrainType.GOAL`로 목적지를 표현한다.
 - 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생한다.

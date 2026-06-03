@@ -68,7 +68,7 @@ GitHub 저장소 연결이나 PR 설정을 돕는 경우에는 `doc/10_github_se
 - `Position`, `Direction`의 이동 계산
 - `TerrainMap.can_enter()`와 지형 조회
 - `Stage.move_player()`의 벽, 범위, 목적지, 실패 결과
-- `Stage.evaluate_player_state()`의 충돌, 호수 추락, 자라 탑승 판정
+- `Stage.evaluate_player_state()`의 충돌, 강 추락, 자라 탑승 판정
 - `Progress`의 스테이지 해금과 최고 별점 갱신
 - `SaveManager`의 저장과 불러오기
 - `StarRating`의 시간별 별점 계산
