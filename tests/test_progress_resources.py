@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 
 from kongoose.models import SoundCue
@@ -53,13 +51,13 @@ def test_save_manager_returns_default_progress_when_file_is_missing(tmp_path) ->
 
 
 def test_star_rating_uses_stage_balance_thresholds() -> None:
-    assert StarRating.calculate(clear_time=20, stage_id=1) == 3
-    assert StarRating.calculate(clear_time=30, stage_id=1) == 2
-    assert StarRating.calculate(clear_time=45, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=46, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=35, stage_id=4) == 3
-    assert StarRating.calculate(clear_time=52, stage_id=4) == 2
-    assert StarRating.calculate(clear_time=75, stage_id=4) == 1
+    assert StarRating.calculate(clear_time=45, stage_id=1) == 3
+    assert StarRating.calculate(clear_time=68, stage_id=1) == 2
+    assert StarRating.calculate(clear_time=100, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=101, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=80, stage_id=4) == 3
+    assert StarRating.calculate(clear_time=120, stage_id=4) == 2
+    assert StarRating.calculate(clear_time=175, stage_id=4) == 1
 
 
 def test_timer_tracks_elapsed_time_with_injected_clock() -> None:
@@ -102,14 +100,36 @@ def test_sound_manager_ignores_missing_cues_and_plays_registered_sound() -> None
 
     sound_manager.register_sound(SoundCue.MOVE, sound)
 
-    assert sound_manager.play(SoundCue.FAILURE) is False
+    assert sound_manager.play("missing") is False
     assert sound_manager.play(SoundCue.MOVE) is True
     assert sound.play_count == 1
+    assert sound.played_loops == [0]
+
+
+def test_sound_manager_passes_loop_count_and_respects_cooldown() -> None:
+    current_time = 10.0
+
+    def now() -> float:
+        return current_time
+
+    sound_manager = SoundManager(clock=now)
+    sound = FakeSound()
+    sound_manager.register_sound(SoundCue.BACKGROUND_MUSIC, sound)
+
+    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, loops=-1) is True
+    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, cooldown=1.0) is False
+
+    current_time = 11.1
+
+    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, cooldown=1.0) is True
+    assert sound.played_loops == [-1, 0]
 
 
 class FakeSound:
     def __init__(self) -> None:
         self.play_count = 0
+        self.played_loops: list[int] = []
 
-    def play(self) -> None:
+    def play(self, loops: int = 0) -> None:
         self.play_count += 1
+        self.played_loops.append(loops)

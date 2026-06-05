@@ -37,6 +37,16 @@ Use these documents when behavior, traceability, or domain meaning is unclear:
 - Do not add deferred features unless explicitly requested.
 - If implementation needs to diverge from `doc/`, explain the reason before changing behavior.
 
+## Source Size Guardrail
+
+- Current runtime source size, excluding tests and data files, is 1,395 total
+  lines across the `kongoose/*.py` code files.
+- For each implementation change, re-check the runtime source line count
+  excluding tests and data, and confirm it stays within 500-1,500 total lines.
+- If the implementation would exceed that range, or looks likely to exceed it,
+  tell the user before continuing so scope, simplification, or splitting can be
+  discussed.
+
 ## Work Style
 
 - Prefer the existing design documents over inventing new behavior.

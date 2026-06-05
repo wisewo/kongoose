@@ -40,7 +40,6 @@ classDiagram
         +start_game()
         +change_scene(scene)
         +quit_game()
-        +get_stage_list()
         +open_stage_select()
         +select_stage(stage_id)
         +start_stage(stage_id)
@@ -173,8 +172,6 @@ classDiagram
     class Turtle {
         -speed
         -direction
-        -length
-        +carries(player)
     }
 
     class Timer {
@@ -218,7 +215,7 @@ classDiagram
         +is_safe()
         +is_warning()
         +is_turtle_ride()
-        +needs_bike_ambience()
+        +is_bike_appearance()
         +is_failure()
         +get_failure_reason()
     }
@@ -227,6 +224,7 @@ classDiagram
         <<enumeration>>
         SAFE
         WARNING
+        RUNNING_CREW_ACTIVE
         TURTLE_RIDE
         BIKE_AMBIENCE
         FAILURE
@@ -263,11 +261,18 @@ classDiagram
 
     class SoundCue {
         <<enumeration>>
-        MOVE
+        MOVE_START
+        MOVE_SUCCESS
+        BLOCKED
         TURTLE
         BIKE_AMBIENCE
         RUNNING_CREW_WARNING
-        FAILURE
+        RUNNING_CREW_ACTIVE
+        LAKE_SPLASH
+        FAILURE_SCREEN
+        CLEAR_SCREEN
+        UI_SELECT
+        BACKGROUND_MUSIC
     }
 
     class ResourceManager {
@@ -338,7 +343,7 @@ classDiagram
 | Direction | 플레이어와 동적 객체의 이동 방향 표현 |
 | GameSprite | 위치 점유와 시간 갱신이 필요한 스테이지 객체의 공통 추상화 |
 | Player | 건구스의 현재 위치, 이동, 자라 탑승 상태 관리 |
-| Bike | 육지 구간 일반 장애물 |
+| Bike | 육지 구간의 빠른 웨이브형 장애물 후보 |
 | RunningCrew | 경고 후 등장하는 한 줄 특수 장애물 |
 | Turtle | 강 구간 이동 발판 |
 | Timer | 스테이지별 경과 시간 측정 |
@@ -346,7 +351,7 @@ classDiagram
 | MoveResult | 플레이어 이동 결과와 이동 직후 실패 원인 전달 |
 | MoveResultType | 플레이어 이동 결과 종류 표현 |
 | StageUpdateResult | 육지/강 구간 갱신 결과와 갱신 직후 실패 원인 전달 |
-| StageUpdateResultType | 안전, 경고, 자라 탑승, 자전거 환경음 필요, 실패 같은 게임 루프 갱신 결과 종류 표현 |
+| StageUpdateResultType | 안전, 경고, 자라 탑승, 자전거 웨이브 등장, 실패 같은 게임 루프 갱신 결과 종류 표현 |
 | FailureReason | 자전거 충돌, 러닝크루 충돌, 강 추락, 화면 밖 밀림 같은 실패 원인 표현 |
 | Progress | 스테이지 해금 상태와 최고 별점 규칙 관리 |
 | SaveManager | 진행 상태 저장/불러오기 |

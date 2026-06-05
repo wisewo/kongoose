@@ -1,10 +1,18 @@
-from __future__ import annotations
-
 import pytest
 
 from kongoose.game import Game
-from kongoose.models import Direction, FailureReason, Position, TerrainType
-from kongoose.results import MoveResult, MoveResultType, StageUpdateResult
+from kongoose.models import (
+    MOVE_BLOCKED,
+    MOVE_CLEARED,
+    MOVE_FAILED,
+    MOVE_MOVED,
+    UPDATE_FAILED,
+    UPDATE_SAFE,
+    Direction,
+    FailureReason,
+    Position,
+    TerrainType,
+)
 from kongoose.scenes import Scene
 from kongoose.stage import Player, Stage, Turtle
 from kongoose.terrain import TerrainMap
@@ -36,11 +44,11 @@ def test_position_moves_one_tile_by_direction() -> None:
     assert position.moved(Direction.RIGHT) == Position(row=2, column=4)
 
 
-def test_terrain_map_allows_lake_but_blocks_walls_and_out_of_bounds() -> None:
+def test_terrain_map_allows_river_but_blocks_walls_and_out_of_bounds() -> None:
     terrain_map = TerrainMap(
         [
             [TerrainType.START, TerrainType.LAND, TerrainType.WALL],
-            [TerrainType.LAKE, TerrainType.SAFE, TerrainType.GOAL],
+            [TerrainType.RIVER, TerrainType.SAFE, TerrainType.GOAL],
         ]
     )
 
@@ -63,26 +71,13 @@ def test_terrain_map_rejects_jagged_layouts() -> None:
         )
 
 
-def test_move_result_helpers_report_outcome_and_failure_reason() -> None:
-    blocked = MoveResult.blocked()
-    moved = MoveResult.moved()
-    failed = MoveResult.failed(FailureReason.HIT_BIKE)
-
-    assert blocked.result_type is MoveResultType.BLOCKED
-    assert blocked.is_blocked()
-    assert moved.is_moved()
-    assert failed.is_failed()
-    assert failed.get_failure_reason() is FailureReason.HIT_BIKE
-
-
-def test_stage_update_result_safe_and_failure_helpers() -> None:
-    safe = StageUpdateResult.safe()
-    failed = StageUpdateResult.failure(FailureReason.FELL_IN_LAKE)
-
-    assert safe.is_safe()
-    assert not safe.is_failure()
-    assert failed.is_failure()
-    assert failed.get_failure_reason() is FailureReason.FELL_IN_LAKE
+def test_result_constants_are_plain_strings() -> None:
+    assert MOVE_BLOCKED == "blocked"
+    assert MOVE_MOVED == "moved"
+    assert MOVE_CLEARED == "cleared"
+    assert MOVE_FAILED == "failed"
+    assert UPDATE_SAFE == "safe"
+    assert UPDATE_FAILED == "failed"
 
 
 def test_game_changes_scene_and_calls_enter() -> None:
@@ -109,8 +104,8 @@ def test_stage_blocks_player_from_walls_and_out_of_bounds() -> None:
     wall_result = stage.move_player(Direction.RIGHT)
     out_of_bounds_result = stage.move_player(Direction.UP)
 
-    assert wall_result.is_blocked()
-    assert out_of_bounds_result.is_blocked()
+    assert wall_result == MOVE_BLOCKED
+    assert out_of_bounds_result == MOVE_BLOCKED
     assert stage.player.position == Position(row=0, column=0)
 
 
@@ -127,7 +122,7 @@ def test_stage_moves_player_one_tile_onto_enterable_terrain() -> None:
 
     result = stage.move_player(Direction.RIGHT)
 
-    assert result.result_type is MoveResultType.MOVED
+    assert result == MOVE_MOVED
     assert stage.player.position == Position(row=0, column=1)
 
 
@@ -143,15 +138,15 @@ def test_stage_reports_clear_when_player_reaches_goal() -> None:
 
     result = stage.move_player(Direction.RIGHT)
 
-    assert result.is_cleared()
+    assert result == MOVE_CLEARED
     assert stage.player.position == Position(row=0, column=1)
 
 
-def test_stage_reports_lake_failure_without_turtle() -> None:
+def test_stage_reports_river_failure_without_turtle() -> None:
     stage = Stage(
         terrain_map=TerrainMap(
             [
-                [TerrainType.START, TerrainType.LAKE],
+                [TerrainType.START, TerrainType.RIVER],
             ]
         ),
         player=Player(Position(row=0, column=0)),
@@ -159,8 +154,8 @@ def test_stage_reports_lake_failure_without_turtle() -> None:
 
     result = stage.move_player(Direction.RIGHT)
 
-    assert result.is_failed()
-    assert result.get_failure_reason() is FailureReason.FELL_IN_LAKE
+    assert result == MOVE_FAILED
+    assert stage.failure_reason == FailureReason.FELL_IN_RIVER
     assert stage.player.position == Position(row=0, column=1)
 
 
@@ -179,6 +174,6 @@ def test_stage_manual_move_leaves_mounted_turtle() -> None:
 
     result = stage.move_player(Direction.RIGHT)
 
-    assert result.is_moved()
+    assert result == MOVE_MOVED
     assert stage.player.position == Position(row=0, column=1)
     assert stage.player.mounted_turtle is None
