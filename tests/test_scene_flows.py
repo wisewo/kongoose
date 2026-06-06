@@ -80,24 +80,27 @@ class StageStub:
         self.update_count += 1
         return self.next_update_result
 
+    def peek_warning_bike_rows(self) -> tuple[int, ...]:
+        return ()
+
 
 class StageWarningStub:
     def __init__(
-        self, player_row: int = 12, warning_row: int = 12, rows: int = 24
+        self, player_row: int = 12, warning_row: int | None = 12, rows: int = 24
     ) -> None:
         self.player = type("Player", (), {"position": Position(player_row, 0)})()
         self.terrain_map = TerrainMap([[TerrainType.LAND] for _ in range(rows)])
         self.failure_reason: FailureReason | None = None
-        self.warning_row = warning_row
+        self.warning_rows = () if warning_row is None else (warning_row,)
 
-    def peek_warning_bike_row(self) -> int | None:
-        return self.warning_row
+    def peek_warning_bike_rows(self) -> tuple[int, ...]:
+        return self.warning_rows
 
 
 class BikeWarningVisibilityStub:
     def __init__(self) -> None:
         self.player = type("Player", (), {"position": Position(10, 0)})()
-        self.warning_row: int | None = 16
+        self.warning_rows = (16,)
         self.terrain_map = TerrainMap(
             [[TerrainType.LAND for _ in range(10)] for _ in range(24)]
         )
@@ -108,6 +111,14 @@ class BikeWarningVisibilityStub:
 
     def update(self, dt: float) -> str:
         return UPDATE_SAFE
+
+    def peek_warning_bike_rows(self) -> tuple[int, ...]:
+        return self.warning_rows
+
+
+class LegacyWarningRowStub:
+    def __init__(self) -> None:
+        self.warning_row = 12
 
 
 class TimerStub:
@@ -186,6 +197,13 @@ def register_turtle_test_images(game: Game) -> None:
         image = pygame.Surface((18, 10), pygame.SRCALPHA)
         image.fill((34, 220, 120, 255))
         game.resource_manager.register_image(f"turtle_{direction}", image)
+
+
+def register_goal_test_images(game: Game) -> None:
+    for stage_id, color in ((1, (30, 220, 80)), (2, (236, 45, 95))):
+        image = pygame.Surface((16, 16), pygame.SRCALPHA)
+        image.fill((*color, 255))
+        game.resource_manager.register_image(f"goal_stage_{stage_id}", image)
 
 
 def register_running_crew_test_images(game: Game) -> None:
@@ -277,7 +295,6 @@ def test_playing_scene_moves_player_updates_stage_and_returns_to_select() -> Non
     game.current_scene.update(0.016)
 
     assert stage.moves == [Direction.UP]
-    assert game.last_play_message == "Moved."
     assert stage.update_count == 1
 
     game.current_scene.handle_event(key_event(pygame.K_ESCAPE))
@@ -352,6 +369,25 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
     )
 
 
+def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((240, 120))
+    stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.GOAL, TerrainType.START]]),
+        player=Player(Position(row=0, column=1)),
+    )
+    game = Game(initial_scene=PlayingScene())
+    game.current_stage = stage
+    game.current_stage_id = 2
+    register_goal_test_images(game)
+
+    game.current_scene.draw(surface)
+    rendered_colors = collect_surface_colors(surface)
+
+    assert (236, 45, 95) in rendered_colors
+    assert (30, 220, 80) not in rendered_colors
+
+
 def test_blocked_move_keeps_next_bike_appear_sound() -> None:
     game = Game(initial_scene=PlayingScene())
     game.current_stage = StageWarningStub(player_row=12, warning_row=12)
@@ -384,6 +420,13 @@ def test_inview_bike_warning_row_plays_appearance_sound() -> None:
     game._play_bike_warning_from_stage()
 
     assert game.sound_manager.played_cues == [(SoundCue.BIKE_AMBIENCE, 0)]
+
+
+def test_legacy_bike_warning_row_attribute_is_ignored() -> None:
+    game = Game(initial_scene=PlayingScene())
+    game.current_stage = LegacyWarningRowStub()
+
+    assert game._pending_bike_warning_rows() == ()
 
 
 def test_offscreen_bike_warning_waits_until_visible_row() -> None:
@@ -553,11 +596,7 @@ def test_playing_scene_grid_layout_fills_screen_width() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
-        surface_width=960,
-        surface_height=720,
-        rows=24,
-        columns=10,
-        focus_position=Position(row=23, column=5),
+        960, 720, 24, 10, Position(row=23, column=5)
     )
 
     assert grid_rect.left == 0
@@ -577,26 +616,35 @@ def test_playing_scene_draws_hud_overlay_above_grid() -> None:
     game = Game(initial_scene=PlayingScene())
     game.current_stage = stage
     game.current_stage_id = 1
-    game.last_play_message = "Moved."
 
     game.current_scene.draw(surface)
 
-    terrain_color = TERRAIN_STYLES[TerrainType.LAND][0]
+    terrain_color = TERRAIN_STYLES[TerrainType.LAND]
     hud_pixel = surface.get_at((20, 20))[:3]
 
     assert hud_pixel != terrain_color
     assert hud_pixel != DEFAULT_BACKGROUND_COLOR
 
 
+def test_playing_hud_padding_contains_status_lines() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((420, 120))
+    surface.fill(DEFAULT_BACKGROUND_COLOR)
+    scene = PlayingScene()
+    title_font = pygame.font.Font(None, 44)
+    body_font = pygame.font.Font(None, 26)
+
+    scene._draw_playing_hud(surface, title_font, body_font, "1", "12.5s")
+
+    assert surface.get_at((10, 60))[:3] != DEFAULT_BACKGROUND_COLOR
+    assert surface.get_at((10, 100))[:3] == DEFAULT_BACKGROUND_COLOR
+
+
 def test_playing_scene_camera_keeps_tall_stage_tiles_large() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
-        surface_width=800,
-        surface_height=600,
-        rows=24,
-        columns=10,
-        focus_position=Position(row=23, column=5),
+        800, 600, 24, 10, Position(row=23, column=5)
     )
     player_rect = scene._cell_rect(
         grid_rect,
@@ -616,11 +664,7 @@ def test_playing_scene_camera_centers_player_away_from_stage_edges() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
-        surface_width=800,
-        surface_height=600,
-        rows=24,
-        columns=10,
-        focus_position=Position(row=12, column=5),
+        800, 600, 24, 10, Position(row=12, column=5)
     )
     player_rect = scene._cell_rect(
         grid_rect,
@@ -665,8 +709,6 @@ def test_position_sprites_are_clipped_to_grid_bounds() -> None:
         grid_rect,
         100,
         BIKE_COLOR,
-        "B",
-        pygame.font.Font(None, 20),
     )
 
     assert surface.get_at((320, 50))[:3] == (0, 0, 0)
@@ -690,8 +732,8 @@ def test_position_sprites_draw_bike_animation_frame_when_registered() -> None:
         pygame.Rect(0, 0, 200, 100),
         100,
         BIKE_COLOR,
-        "B",
-        pygame.font.Font(None, 20),
+        game.current_scene._get_bike_image,
+        0.4,
     )
     rendered_colors = collect_surface_colors(surface)
 
@@ -715,8 +757,8 @@ def test_position_sprites_draw_turtle_image_when_registered() -> None:
         pygame.Rect(0, 0, 200, 100),
         100,
         TURTLE_COLOR,
-        "T",
-        pygame.font.Font(None, 20),
+        game.current_scene._get_turtle_image,
+        0.32,
     )
     rendered_colors = collect_surface_colors(surface)
 
@@ -743,7 +785,6 @@ def test_running_crew_warning_draws_registered_warning_frame() -> None:
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
-        pygame.font.Font(None, 20),
     )
     rendered_colors = collect_surface_colors(surface)
 
@@ -771,7 +812,6 @@ def test_running_crew_active_draws_registered_runner_in_each_cell() -> None:
         TerrainMap([[TerrainType.LAND for _column in range(8)]]),
         pygame.Rect(0, 0, 800, 100),
         100,
-        pygame.font.Font(None, 20),
     )
 
     assert surface.get_at((50, 50))[:3] == (29, 211, 188)
@@ -782,6 +822,10 @@ def test_running_crew_active_draws_registered_runner_in_each_cell() -> None:
     assert surface.get_at((550, 50))[:3] == (124, 82, 176)
     assert surface.get_at((650, 50))[:3] == (68, 166, 86)
     assert surface.get_at((750, 50))[:3] == (232, 121, 31)
+
+
+def test_running_crew_visual_tile_duration_is_three_times_faster() -> None:
+    assert RUNNING_CREW_TILE_DURATION == 0.08
 
 
 def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None:
@@ -819,7 +863,6 @@ def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
-        pygame.font.Font(None, 20),
     )
 
     assert surface.get_at((50, 50))[:3] == active_color
@@ -845,13 +888,38 @@ def test_running_crew_active_moves_runners_right_and_refills_from_left() -> None
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
-        pygame.font.Font(None, 20),
     )
 
     assert surface.get_at((15, 50))[:3] == (232, 121, 31)
     assert surface.get_at((100, 50))[:3] == (29, 211, 188)
     assert surface.get_at((200, 50))[:3] == (211, 64, 92)
     assert surface.get_at((285, 50))[:3] == (67, 107, 218)
+
+
+def test_running_crew_tail_exits_without_refilling_after_active_duration() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((320, 100))
+    surface.fill((0, 0, 0))
+    game = Game(initial_scene=PlayingScene())
+    register_running_crew_test_images(game)
+    crew = RunningCrew(
+        row=0,
+        columns=3,
+        warning_time=0.2,
+        active_duration=1.0,
+        elapsed_time=0.2 + 1.0 + RUNNING_CREW_TILE_DURATION * 2.5,
+    )
+
+    game.current_scene._draw_running_crews(
+        surface,
+        [crew],
+        TerrainMap([[TerrainType.LAND for _column in range(3)]]),
+        pygame.Rect(0, 0, 300, 100),
+        100,
+    )
+
+    assert surface.get_at((50, 50))[:3] == (0, 0, 0)
+    assert surface.get_at((250, 50))[:3] != (0, 0, 0)
 
 
 def test_playing_scene_changes_to_failed_or_result_for_stage_outcomes() -> None:

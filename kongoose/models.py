@@ -3,19 +3,11 @@ from enum import Enum
 
 
 class Direction:
-    UP = "up"
-    DOWN = "down"
-    LEFT = "left"
-    RIGHT = "right"
+    UP, DOWN, LEFT, RIGHT = "up", "down", "left", "right"
 
 
 class TerrainType:
-    LAND = "."
-    RIVER = "~"
-    SAFE = "-"
-    WALL = "#"
-    START = "S"
-    GOAL = "G"
+    LAND, RIVER, SAFE, WALL, START, GOAL = ".", "~", "-", "#", "S", "G"
 
 
 class FailureReason(Enum):
@@ -26,32 +18,29 @@ class FailureReason(Enum):
 
 
 class SoundCue:
-    MOVE_START = "move_start"
-    MOVE_SUCCESS = "move_success"
-    MOVE = "move"
-    BLOCKED = "blocked"
-    TURTLE = "turtle"
-    BIKE_AMBIENCE = "bike_ambience"
+    MOVE_START, MOVE_SUCCESS, MOVE = "move_start", "move_success", "move"
+    BLOCKED, TURTLE, BIKE_AMBIENCE = "blocked", "turtle", "bike_ambience"
     RUNNING_CREW_WARNING = "running_crew_warning"
     RUNNING_CREW_ACTIVE = "running_crew_active"
-    LAKE_SPLASH = "lake_splash"
-    FAILURE_SCREEN = "failure_screen"
-    CLEAR_SCREEN = "clear_screen"
-    UI_SELECT = "ui_select"
+    LAKE_SPLASH, FAILURE_SCREEN = "lake_splash", "failure_screen"
+    CLEAR_SCREEN, UI_SELECT = "clear_screen", "ui_select"
     BACKGROUND_MUSIC = "background_music"
 
 
-MOVE_BLOCKED = "blocked"
-MOVE_MOVED = "moved"
-MOVE_CLEARED = "cleared"
-MOVE_FAILED = "failed"
+MOVE_BLOCKED, MOVE_MOVED, MOVE_CLEARED, MOVE_FAILED = (
+    "blocked",
+    "moved",
+    "cleared",
+    "failed",
+)
 
-UPDATE_SAFE = "safe"
-UPDATE_WARNING = "warning"
+UPDATE_SAFE, UPDATE_WARNING = "safe", "warning"
 UPDATE_RUNNING_CREW_ACTIVE = "running_crew_active"
-UPDATE_TURTLE_RIDE = "turtle_ride"
-UPDATE_BIKE_AMBIENCE = "bike_ambience"
-UPDATE_FAILED = "failed"
+UPDATE_TURTLE_RIDE, UPDATE_BIKE_AMBIENCE, UPDATE_FAILED = (
+    "turtle_ride",
+    "bike_ambience",
+    "failed",
+)
 
 
 @dataclass

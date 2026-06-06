@@ -1,20 +1,13 @@
 import csv
 from pathlib import Path
 
-from kongoose.models import Position, TerrainType
+from kongoose.models import Position
 from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
 from kongoose.terrain import TerrainMap
 
-STAGE_IDS = (1, 2, 3, 4)
+STAGE_IDS = range(1, 5)
 STAGE_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "stages"
-VALID_TILES = {
-    TerrainType.LAND,
-    TerrainType.RIVER,
-    TerrainType.SAFE,
-    TerrainType.WALL,
-    TerrainType.START,
-    TerrainType.GOAL,
-}
+VALID_TILES = set(".~-#SG")
 
 
 def build_default_stages() -> dict[int, Stage]:
@@ -29,21 +22,16 @@ def build_default_stages() -> dict[int, Stage]:
 
 
 def _load_layout(path: Path) -> list[str]:
-    return [
-        line.strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return path.read_text(encoding="utf-8").split()
 
 
 def _load_actors(path: Path) -> dict[int, dict[str, list]]:
     actors: dict[int, dict[str, list]] = {}
     factories = {
-        "bike": ("bikes", _make_bike),
+        "bike": ("bikes", lambda row: _make_moving_actor(row, Bike)),
         "running_crew": ("running_crews", _make_running_crew),
-        "turtle": ("turtles", _make_turtle),
+        "turtle": ("turtles", lambda row: _make_moving_actor(row, Turtle)),
     }
-
     with path.open(newline="", encoding="utf-8") as file:
         for row in csv.DictReader(file):
             stage_id = _int(row, "stage")
@@ -53,7 +41,6 @@ def _load_actors(path: Path) -> dict[int, dict[str, list]]:
                 raise ValueError(f"unknown actor type: {actor_type}")
             actor_list, make_actor = factories[actor_type]
             stage_actors[actor_list].append(make_actor(row))
-
     return actors
 
 
@@ -61,28 +48,20 @@ def _new_actor_lists() -> dict[str, list]:
     return {"bikes": [], "running_crews": [], "turtles": []}
 
 
-def _make_bike(row: dict) -> Bike:
-    return Bike(
-        position=Position(row=_int(row, "row"), column=_int(row, "column")),
-        direction=_text(row, "direction"),
-        speed=_float(row, "speed"),
+def _make_moving_actor(row: dict, actor_type):
+    return actor_type(
+        Position(_int(row, "row"), _int(row, "column")),
+        _text(row, "direction"),
+        _float(row, "speed"),
     )
 
 
 def _make_running_crew(row: dict) -> RunningCrew:
     return RunningCrew(
-        row=_int(row, "row"),
-        columns=_int(row, "columns"),
-        warning_time=_float(row, "warning_time"),
-        active_duration=_float(row, "active_duration"),
-    )
-
-
-def _make_turtle(row: dict) -> Turtle:
-    return Turtle(
-        position=Position(row=_int(row, "row"), column=_int(row, "column")),
-        direction=_text(row, "direction"),
-        speed=_float(row, "speed"),
+        _int(row, "row"),
+        _int(row, "columns"),
+        _float(row, "warning_time"),
+        _float(row, "active_duration"),
     )
 
 
@@ -94,11 +73,11 @@ def _build_stage(
 ) -> Stage:
     terrain_rows, start_position = _parse_layout(layout)
     return Stage(
-        terrain_map=TerrainMap(terrain_rows),
-        player=Player(position=start_position),
-        bikes=bikes,
-        running_crews=running_crews,
-        turtles=turtles,
+        TerrainMap(terrain_rows),
+        Player(start_position),
+        bikes,
+        running_crews,
+        turtles,
         bike_waves_enabled=bool(bikes),
         bike_wave_interval=2.0,
         bike_wave_warning_lookahead=1.0,
@@ -113,24 +92,20 @@ def _parse_layout(layout: list[str]) -> tuple[list[list[str]], Position]:
     )
     if invalid_tile is not None:
         raise ValueError(f"unknown tile type: {invalid_tile}")
-
     terrain_rows = [list(row) for row in layout]
     start_positions = [
         Position(row=row_index, column=column_index)
         for row_index, row in enumerate(layout)
         for column_index, tile in enumerate(row)
-        if tile == TerrainType.START
+        if tile == "S"
     ]
-
     if len(start_positions) != 1:
         raise ValueError("stage layout must contain exactly one START tile")
-
     return terrain_rows, start_positions[0]
 
 
 def _text(row: dict, name: str) -> str:
-    value = row.get(name, "")
-    return "" if value is None else value.strip()
+    return (row.get(name) or "").strip()
 
 
 def _int(row: dict, name: str) -> int:

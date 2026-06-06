@@ -35,7 +35,6 @@ def test_selecting_unlocked_stage_uses_real_stage_data() -> None:
 
     assert game.current_stage is game.stages[1]
     assert isinstance(game.current_scene, PlayingScene)
-    assert game.last_play_message == ""
 
 
 def test_default_stages_match_documented_balance_shape() -> None:

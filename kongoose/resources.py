@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from pathlib import Path
 from time import monotonic
 
@@ -8,9 +7,8 @@ class SoundManager:
         self.sounds = {}
         self._clock = monotonic if clock is None else clock
         self._last_played_at = {}
-        self._active_channels = {}
 
-    def load(self, sound_paths: Mapping[str, str | Path]) -> None:
+    def load(self, sound_paths) -> None:
         import pygame
 
         for cue, path in sound_paths.items():
@@ -24,23 +22,15 @@ class SoundManager:
     def register_sound(self, cue: str, sound) -> None:
         self.sounds[cue] = sound
 
-    def play(
-        self,
-        cue: str,
-        loops: int = 0,
-        cooldown: float = 0.0,
-        channel_index: int | None = None,
-    ) -> bool:
+    def play(self, cue, loops=0, cooldown=0.0, channel_index=None) -> bool:
         sound = self.sounds.get(cue)
         if sound is None:
             return False
         now = self._clock()
         if cooldown > 0 and now - self._last_played_at.get(cue, -cooldown) < cooldown:
             return False
-
-        played_channel = None
         if channel_index is None:
-            played_channel = sound.play(loops=loops)
+            sound.play(loops=loops)
         else:
             import pygame
 
@@ -50,31 +40,13 @@ class SoundManager:
             play_channel = pygame.mixer.Channel(channel_index)
             play_channel.stop()
             play_channel.play(sound, loops=loops)
-            played_channel = play_channel
-
-        if played_channel is not None:
-            self._active_channels[cue] = played_channel
-
         self._last_played_at[cue] = now
         return True
-
-    def stop(self, cue: str) -> None:
-        channel = self._active_channels.get(cue)
-        if channel is None:
-            return
-        channel.stop()
-        del self._active_channels[cue]
 
 
 class ResourceManager:
     def __init__(self) -> None:
         self.images = {}
-
-    def load(self, image_paths: Mapping[str, str | Path]) -> None:
-        import pygame
-
-        for name, path in image_paths.items():
-            self.images[name] = pygame.image.load(str(path)).convert_alpha()
 
     def register_image(self, name: str, image) -> None:
         self.images[name] = image
