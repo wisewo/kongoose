@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 
 from kongoose.models import Position
-from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
+from kongoose.stage import Bike, BikeLane, Player, Stage, StudentCrowd, Turtle
 from kongoose.terrain import TerrainMap
 
 STAGE_IDS = range(1, 5)
@@ -29,7 +29,8 @@ def _load_actors(path: Path) -> dict[int, dict[str, list]]:
     actors: dict[int, dict[str, list]] = {}
     factories = {
         "bike": ("bikes", lambda row: _make_moving_actor(row, Bike)),
-        "running_crew": ("running_crews", _make_running_crew),
+        "bike_lane": ("bike_lanes", _make_bike_lane),
+        "student_crowd": ("student_crowds", _make_student_crowd),
         "turtle": ("turtles", lambda row: _make_moving_actor(row, Turtle)),
     }
     with path.open(newline="", encoding="utf-8") as file:
@@ -45,7 +46,7 @@ def _load_actors(path: Path) -> dict[int, dict[str, list]]:
 
 
 def _new_actor_lists() -> dict[str, list]:
-    return {"bikes": [], "running_crews": [], "turtles": []}
+    return {"bikes": [], "bike_lanes": [], "student_crowds": [], "turtles": []}
 
 
 def _make_moving_actor(row: dict, actor_type):
@@ -56,8 +57,8 @@ def _make_moving_actor(row: dict, actor_type):
     )
 
 
-def _make_running_crew(row: dict) -> RunningCrew:
-    return RunningCrew(
+def _make_student_crowd(row: dict) -> StudentCrowd:
+    return StudentCrowd(
         _int(row, "row"),
         _int(row, "columns"),
         _float(row, "warning_time"),
@@ -65,24 +66,50 @@ def _make_running_crew(row: dict) -> RunningCrew:
     )
 
 
+def _make_bike_lane(row: dict) -> BikeLane:
+    return BikeLane(
+        _int(row, "row"),
+        _text(row, "direction"),
+        _float(row, "speed"),
+        _float(row, "spawn_gap"),
+        _float(row, "initial_offset"),
+        _int(row, "max_active"),
+    )
+
+
 def _build_stage(
     layout: list[str],
     bikes: list[Bike],
-    running_crews: list[RunningCrew],
+    bike_lanes: list[BikeLane],
+    student_crowds: list[StudentCrowd],
     turtles: list[Turtle],
 ) -> Stage:
     terrain_rows, start_position = _parse_layout(layout)
+    columns = len(terrain_rows[0])
     return Stage(
         TerrainMap(terrain_rows),
         Player(start_position),
-        bikes,
-        running_crews,
+        bikes + _make_lane_bikes(bike_lanes, columns),
+        student_crowds,
         turtles,
-        bike_waves_enabled=bool(bikes),
-        bike_wave_interval=2.0,
-        bike_wave_warning_lookahead=1.0,
-        bike_wave_batch_size=2,
+        bike_lanes,
     )
+
+
+def _make_lane_bikes(bike_lanes: list[BikeLane], columns: int) -> list[Bike]:
+    bikes = []
+    for lane in bike_lanes:
+        column = 0 if lane.direction == "right" else columns - 1
+        for _count in range(lane.max_active):
+            bikes.append(
+                Bike(
+                    Position(lane.row, column),
+                    lane.direction,
+                    lane.speed,
+                    is_active=False,
+                )
+            )
+    return bikes
 
 
 def _parse_layout(layout: list[str]) -> tuple[list[list[str]], Position]:

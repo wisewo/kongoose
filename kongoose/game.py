@@ -1,4 +1,4 @@
-import math
+import random
 from pathlib import Path
 
 from kongoose import models as M
@@ -10,10 +10,9 @@ from kongoose.storage import SaveManager
 from kongoose.timing import StarRating, Timer
 
 MAX_STAGE_COUNT = 4
-BIKE_CHANNEL = 3
-ACTION_CHANNEL = 4
-CREW_CHANNEL = 5
-TURTLE_CHANNEL = 6
+BIKE_AMBIENCE_INTERVAL_RANGE = (2.0, 5.0)
+BIKE_AMBIENCE_BELL_COUNT_RANGE = (1, 3)
+BIKE_AMBIENCE_VOLUME_RANGE = (0.2, 1.0)
 SOUND_DIR = Path(__file__).resolve().parent.parent / "assets" / "sounds"
 DEFAULT_SOUND_PATHS = {
     cue: SOUND_DIR / filename
@@ -23,19 +22,14 @@ DEFAULT_SOUND_PATHS = {
         (S.BLOCKED, "blocked_obstacle.wav"),
         (S.TURTLE, "turtle_ride.wav"),
         (S.BIKE_AMBIENCE, "bike_appear.wav"),
-        (S.RUNNING_CREW_WARNING, "running_crew_warning.wav"),
-        (S.RUNNING_CREW_ACTIVE, "running_crew_active.wav"),
+        (S.STUDENT_CROWD, "student_crowd.wav"),
+        (S.WATER_AMBIENCE, "running_water.mp3"),
         (S.LAKE_SPLASH, "lake_game_over.wav"),
         (S.UI_SELECT, "ui_select.wav"),
         (S.BACKGROUND_MUSIC, "background_music.wav"),
         (S.FAILURE_SCREEN, "failure_screen.wav"),
         (S.CLEAR_SCREEN, "clear_screen.wav"),
     )
-}
-UPDATE_SOUNDS = {
-    M.UPDATE_WARNING: (S.RUNNING_CREW_WARNING, 1.0, CREW_CHANNEL),
-    M.UPDATE_RUNNING_CREW_ACTIVE: (S.RUNNING_CREW_ACTIVE, 0.0, CREW_CHANNEL),
-    M.UPDATE_TURTLE_RIDE: (S.TURTLE, 0.8, TURTLE_CHANNEL),
 }
 MOVE_SOUNDS = {
     M.MOVE_BLOCKED: S.BLOCKED,
@@ -45,9 +39,15 @@ MOVE_SOUNDS = {
 
 class Game:
     def __init__(
-        self, window_size=(960, 720), title="Kongoose", initial_scene=None, stages=None
+        self,
+        window_size=(960, 720),
+        title="Kongoose",
+        initial_scene=None,
+        stages=None,
+        rng=None,
     ):
         self.window_size, self.title = window_size, title
+        self._rng = rng or random.Random()
         self.screen = self.clock = None
         self.running = False
         self.current_scene = None
@@ -58,7 +58,8 @@ class Game:
         self.progress = self.save_manager.load_progress()
         self.current_stage_id = None
         self.last_failure_reason = self.last_clear_time = self.last_stars = None
-        self._last_bike_warning_rows = ()
+        self._bike_ambience_elapsed = 0.0
+        self._next_bike_ambience_delay = self._random_bike_ambience_delay()
         if initial_scene is not None:
             self.change_scene(initial_scene)
 
@@ -90,7 +91,7 @@ class Game:
     def start_game(self) -> None:
         self.change_scene(scenes.MainScene())
 
-    def change_scene(self, scene: scenes.Scene) -> None:
+    def change_scene(self, scene) -> None:
         self.current_scene = scene
         scene.enter(self)
 
@@ -98,6 +99,7 @@ class Game:
         self.running = False
 
     def open_stage_select(self) -> None:
+        self._stop_water_ambience()
         self.sound_manager.play(S.UI_SELECT)
         self.change_scene(scenes.StageSelectScene())
 
@@ -111,11 +113,12 @@ class Game:
     def start_stage(self, stage_id: int) -> None:
         self.current_stage_id, self.current_stage = stage_id, self.stages[stage_id]
         self.last_failure_reason = self.last_clear_time = self.last_stars = None
-        self._last_bike_warning_rows = ()
+        self._reset_bike_ambience_timer()
         self.current_stage.initialize()
         self.timer.reset()
         self.timer.start()
         self.change_scene(scenes.PlayingScene())
+        self._sync_water_ambience()
 
     def start_next_stage(self) -> None:
         if self.current_stage_id is None:
@@ -136,6 +139,7 @@ class Game:
         self.start_stage(self.current_stage_id)
 
     def return_to_main(self) -> None:
+        self._stop_water_ambience()
         self.sound_manager.play(S.UI_SELECT)
         self.change_scene(scenes.MainScene())
 
@@ -143,19 +147,23 @@ class Game:
         self._handle_move_result(self.current_stage.move_player(direction))
 
     def update_stage(self, dt: float) -> None:
-        self._handle_stage_update_result(self.current_stage.update(dt))
+        result = self.current_stage.update(dt)
+        self._handle_stage_update_result(result)
+        if result != M.UPDATE_FAILED:
+            self._update_bike_ambience(dt)
 
     def fail_current_stage(self, reason) -> None:
         self.last_failure_reason = reason
+        self._stop_water_ambience()
         self.change_scene(scenes.FailedScene())
         self.sound_manager.play(S.FAILURE_SCREEN)
 
     def clear_current_stage(self) -> None:
         self.timer.stop()
+        self._stop_water_ambience()
         self.last_clear_time = self.timer.get_elapsed_time()
-        self.last_stars = StarRating.calculate(
-            self.last_clear_time, self.current_stage_id
-        )
+        stage_id = self.current_stage_id
+        self.last_stars = StarRating.calculate(self.last_clear_time, stage_id)
         self.progress.record_stage_clear(self.current_stage_id, self.last_stars)
         self.save_manager.save_progress(self.progress)
         self.change_scene(scenes.ResultScene())
@@ -181,60 +189,53 @@ class Game:
             self.clear_current_stage()
             return
         if cue := MOVE_SOUNDS.get(result):
-            self.sound_manager.play(cue, channel_index=ACTION_CHANNEL)
+            player = getattr(self.current_stage, "player", None)
+            mounted_turtle = getattr(player, "mounted_turtle", None)
+            if result == M.MOVE_MOVED and mounted_turtle is not None:
+                cue = S.TURTLE
+            self.sound_manager.play(cue)
 
     def _handle_stage_update_result(self, result: str | None) -> None:
-        self._maybe_play_pending_bike_warning()
         if result == M.UPDATE_FAILED:
             self._handle_failure_from_stage()
             return
-        if result in (None, M.UPDATE_BIKE_AMBIENCE):
+        if result == M.UPDATE_STUDENT_CROWD_ACTIVE:
+            self.sound_manager.play(S.STUDENT_CROWD)
             return
-        if update_sound := UPDATE_SOUNDS.get(result):
-            cue, cooldown, channel = update_sound
-            self.sound_manager.play(cue, cooldown=cooldown, channel_index=channel)
+        if result in (None, M.UPDATE_TURTLE_RIDE):
+            return
 
-    def _play_bike_warning_from_stage(self) -> bool:
-        if not any(
-            self._is_row_in_view(row) for row in self._pending_bike_warning_rows()
-        ):
-            return False
-        self.sound_manager.play(S.BIKE_AMBIENCE, channel_index=BIKE_CHANNEL)
-        return True
+    def _update_bike_ambience(self, dt: float) -> None:
+        if not getattr(self.current_stage, "bikes", ()):
+            return
+        self._bike_ambience_elapsed += dt
+        if self._bike_ambience_elapsed < self._next_bike_ambience_delay:
+            return
+        self._bike_ambience_elapsed = 0.0
+        self._play_bike_ambience_burst()
+        self._next_bike_ambience_delay = self._random_bike_ambience_delay()
 
-    def _maybe_play_pending_bike_warning(self) -> bool:
-        if not (warning_rows := self._pending_bike_warning_rows()):
-            self._last_bike_warning_rows = ()
-            return False
-        if warning_rows == self._last_bike_warning_rows:
-            return False
-        if self._play_bike_warning_from_stage():
-            self._last_bike_warning_rows = warning_rows
-            return True
-        return False
+    def _play_bike_ambience_burst(self) -> None:
+        minimum, maximum = BIKE_AMBIENCE_BELL_COUNT_RANGE
+        for _count in range(self._rng.randint(minimum, maximum)):
+            volume = self._random_bike_ambience_volume()
+            self.sound_manager.play(S.BIKE_AMBIENCE, volume=volume)
 
-    def _pending_bike_warning_rows(self) -> tuple[int, ...]:
-        if self.current_stage is None:
-            return ()
-        peek_warning_rows = getattr(self.current_stage, "peek_warning_bike_rows", None)
-        return tuple(peek_warning_rows()) if callable(peek_warning_rows) else ()
+    def _random_bike_ambience_delay(self) -> float:
+        return self._rng.uniform(*BIKE_AMBIENCE_INTERVAL_RANGE)
 
-    def _is_row_in_view(self, row: int) -> bool:
-        if self.current_stage is None:
-            return False
-        terrain_map = self.current_stage.terrain_map
-        rows, columns = terrain_map.rows, terrain_map.columns
-        if rows <= 0 or columns <= 0:
-            return False
-        available_width, available_height = self.window_size
-        if available_width <= 0 or available_height <= 0:
-            return False
-        cell_size = max(scenes.MIN_TILE_SIZE, available_width / columns)
-        grid_height = cell_size * rows
-        if grid_height <= available_height:
-            return 0 <= row < rows
-        player_row = self.current_stage.player.position.row
-        top = scenes.grid_top_for_focus(rows, cell_size, available_height, player_row)
-        start = max(0, math.floor(-top / cell_size))
-        end = min(rows - 1, math.ceil((available_height - top) / cell_size) - 1)
-        return start <= row <= end
+    def _random_bike_ambience_volume(self) -> float:
+        return self._rng.uniform(*BIKE_AMBIENCE_VOLUME_RANGE)
+
+    def _reset_bike_ambience_timer(self) -> None:
+        self._bike_ambience_elapsed = 0.0
+        self._next_bike_ambience_delay = self._random_bike_ambience_delay()
+
+    def _sync_water_ambience(self) -> None:
+        self._stop_water_ambience()
+        terrain = getattr(self.current_stage, "terrain_map", None)
+        if terrain is not None and terrain.has_terrain(M.TerrainType.RIVER):
+            self.sound_manager.play(S.WATER_AMBIENCE, loops=-1, volume=0.45)
+
+    def _stop_water_ambience(self) -> None:
+        self.sound_manager.stop(S.WATER_AMBIENCE)

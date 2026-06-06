@@ -11,7 +11,7 @@
 - `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 강 칸은 `can_enter(position)`에서 막지 않는다.
 - `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다. 같은 판정 규칙은 플레이어 이동 직후와 `Stage.update(dt)` 직후에 모두 적용한다.
 - `Goal` 클래스는 사용하지 않고 `TerrainType.GOAL`로 목적지를 표현한다.
-- 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생한다.
+- 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생하며, 필요한 경우 1회 재생 볼륨을 함께 전달한다. 강물처럼 반복 재생되는 스테이지 환경음은 `SoundManager.stop(cue)`로 스테이지 이탈 시 정지한다.
 - 게임 루프의 시간 흐름은 SSD의 Actor로 두지 않고, `Game.run()` 내부에서 현재 `Scene.update(dt)`와 `Scene.draw(surface)`가 반복되는 흐름으로 표현한다.
 - Use Case와의 Traceability를 위해 `SD-01`부터 `SD-07`까지 `UC-01`부터 `UC-07`에 대응시킨다.
 
@@ -94,6 +94,7 @@ sequenceDiagram
     participant Progress
     participant Stage
     participant Timer
+    participant SoundManager
     participant StageSelectScene
     participant PlayingScene
 
@@ -108,6 +109,9 @@ sequenceDiagram
         Game->>Timer: start()
         Game->>Game: change_scene(PlayingScene)
         Game->>PlayingScene: enter(game)
+        opt 강 지형이 있는 스테이지
+            Game->>SoundManager: play(SoundCue.WATER_AMBIENCE, loops=-1, volume)
+        end
         PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 게임 화면 표시
     else 선택한 스테이지가 잠김
@@ -130,7 +134,8 @@ sequenceDiagram
     participant TerrainMap
     participant PlayerObj as Player
     participant Bike
-    participant RunningCrew
+    participant BikeLane
+    participant StudentCrowd
     participant Turtle
     participant Timer
     participant StarRating
@@ -154,11 +159,11 @@ sequenceDiagram
         PlayingScene-->>User: 현재 게임 화면 갱신
     else 이동 가능한 위치
         TerrainMap-->>Stage: true
-        Stage->>PlayerObj: move_to(target_position)
+        Stage->>PlayerObj: position = target_position
         Stage->>TerrainMap: get_terrain(target_position)
         TerrainMap-->>Stage: terrain_type
         Stage->>Bike: occupies(target_position)
-        Stage->>RunningCrew: occupies(target_position)
+        Stage->>StudentCrowd: occupies(target_position)
         Stage->>Turtle: occupies(target_position)
         Stage->>Stage: evaluate_player_state()
 
@@ -203,8 +208,9 @@ sequenceDiagram
     loop Game.run() 내부 반복
         Game->>PlayingScene: update(dt)
         PlayingScene->>Stage: update(dt)
+        Stage->>BikeLane: update(dt)
         Stage->>Bike: update(dt)
-        Stage->>RunningCrew: update(dt)
+        Stage->>StudentCrowd: update(dt)
         Stage->>Turtle: update(dt)
         Stage->>Stage: evaluate_player_state()
         Stage-->>PlayingScene: StageUpdateResult(result_type)
@@ -218,25 +224,24 @@ sequenceDiagram
             PlayingScene->>SoundManager: play(SoundCue.FAILURE_SCREEN)
             FailedScene->>FailedScene: draw(surface)
             FailedScene-->>User: 실패 화면 표시
-        else 러닝크루 경고 발생
-            PlayingScene->>SoundManager: play(SoundCue.RUNNING_CREW_WARNING)
+        else 학생 무리 경고 발생
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 경고와 게임 화면 표시
-        else 러닝크루 실제 등장
-            PlayingScene->>SoundManager: play(SoundCue.RUNNING_CREW_ACTIVE)
+            PlayingScene-->>User: 시각 경고와 게임 화면 표시
+        else 학생 무리 실제 등장
+            PlayingScene->>SoundManager: play(SoundCue.STUDENT_CROWD)
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 러닝크루 등장 상태와 게임 화면 표시
+            PlayingScene-->>User: 학생 무리 등장 상태, 효과음, 게임 화면 표시
         else 자라 탑승
             PlayingScene->>SoundManager: play(SoundCue.TURTLE)
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
-        else 자전거 웨이브 등장
-            PlayingScene->>SoundManager: play(SoundCue.BIKE_AMBIENCE)
-            PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 등장한 자전거와 게임 화면 표시
         else 안전 상태
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
+        end
+
+        opt 자전거 후보가 있는 스테이지의 비주기적 배경 효과음
+            Game->>SoundManager: play(SoundCue.BIKE_AMBIENCE, volume)
         end
     end
 ```

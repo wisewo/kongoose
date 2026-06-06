@@ -18,10 +18,10 @@ PLAYING_HUD_HEIGHT = 86
 ASSET_DIR = Path(__file__).resolve().parent.parent / "assets"
 DEFAULT_BACKGROUND_COLOR = (242, 247, 241)
 BIKE_FRAME_COUNT = 4
-RUNNING_CREW_FRAME_COUNT = 4
-RUNNING_CREW_RUNNER_COUNT = 8
-RUNNING_CREW_FRAME_DURATION = 0.12
-RUNNING_CREW_TILE_DURATION = 0.08
+STUDENT_CROWD_FRAME_COUNT = 4
+STUDENT_CROWD_RUNNER_COUNT = 8
+STUDENT_CROWD_FRAME_DURATION = 0.12
+STUDENT_CROWD_TILE_DURATION = 0.08
 TURTLE_IMAGE_NAMES = {Direction.LEFT: "turtle_left", Direction.RIGHT: "turtle_right"}
 STAR_FILLED_IMAGE = "star_filled"
 STAR_EMPTY_IMAGE = "star_empty"
@@ -40,7 +40,7 @@ TERRAIN_STYLES = {
 }
 PLAYER_COLOR = (240, 142, 74)
 BIKE_COLOR = (210, 66, 70)
-RUNNING_CREW_COLOR = (146, 80, 170)
+STUDENT_CROWD_COLOR = (146, 80, 170)
 TURTLE_COLOR = (72, 170, 120)
 DIRECTION_KEYS = {
     pygame.K_UP: Direction.UP,
@@ -89,15 +89,14 @@ def _clipped(surface, rect):
 
 def _trim_transparent_margins(image):
     bounds = image.get_bounding_rect(1)
-    if bounds.width <= 0 or bounds.height <= 0:
-        return image
-    return image.subsurface(bounds).copy()
+    return (
+        image
+        if bounds.width <= 0 or bounds.height <= 0
+        else image.subsurface(bounds).copy()
+    )
 
 
-Scene = object
-
-
-class EmptyScene(Scene):
+class EmptyScene:
     def __init__(self, background_color=DEFAULT_BACKGROUND_COLOR) -> None:
         self._background_color = background_color
         self._game = None
@@ -105,9 +104,6 @@ class EmptyScene(Scene):
 
     def enter(self, game) -> None:
         self._game = game
-
-    def draw(self, surface) -> None:
-        surface.fill(self._background_color)
 
     def update(self, dt: float) -> None:
         return None
@@ -152,10 +148,8 @@ class EmptyScene(Scene):
         self._dispatch_key(event, *bindings)
 
     def _draw_centered_text(self, surface, text: str, y: int, font, color) -> None:
-        width, _height = surface.get_size()
         image = font.render(text, True, color)
-        rect = image.get_rect(center=(width // 2, y))
-        surface.blit(image, rect)
+        surface.blit(image, image.get_rect(center=(surface.get_width() // 2, y)))
 
     def _draw_centered_lines(self, surface, lines, y, font, color=TEXT_COLOR):
         for line in lines:
@@ -171,8 +165,7 @@ class EmptyScene(Scene):
         game = self._game
         if game is None:
             return None
-        cached_image = game.resource_manager.get_image(image_name)
-        if cached_image is not None:
+        if cached_image := game.resource_manager.get_image(image_name):
             return cached_image
         image_path = ASSET_DIR / f"{image_name}.png"
         if not image_path.exists():
@@ -313,15 +306,6 @@ class PlayingScene(EmptyScene):
                 self._hop_end_position = player.position
                 self._hop_elapsed = 0.0
 
-            if (
-                game.current_scene is self
-                and player is not None
-                and start_position != player.position
-            ):
-                self._hop_start_position = start_position
-                self._hop_end_position = player.position
-                self._hop_elapsed = 0.0
-
     def update(self, dt: float) -> None:
         if self._hop_start_position is not None:
             self._hop_elapsed += dt
@@ -338,8 +322,7 @@ class PlayingScene(EmptyScene):
         stage_text = "-" if stage_id is None else str(stage_id)
         elapsed_text = f"{game.timer.get_elapsed_time():.1f}s"
         stage = game.current_stage
-        terrain_map = stage.terrain_map
-        player = stage.player
+        terrain_map, player = stage.terrain_map, stage.player
         surface.fill(self._background_color)
         width, height = surface.get_size()
         title_font, body_font = _fonts(44, 26)
@@ -352,8 +335,8 @@ class PlayingScene(EmptyScene):
         )
         grid_rect.move_ip(0, PLAYING_HUD_HEIGHT)
         self._draw_terrain_grid(surface, terrain_map, grid_rect, cell_size, stage_id)
-        crews = getattr(stage, "running_crews", [])
-        self._draw_running_crews(surface, crews, terrain_map, grid_rect, cell_size)
+        crowds = getattr(stage, "student_crowds", [])
+        self._draw_student_crowds(surface, crowds, terrain_map, grid_rect, cell_size)
         for sprites, color, get_image, width_bonus in (
             (getattr(stage, "turtles", []), TURTLE_COLOR, self._get_turtle_image, 0.32),
             (getattr(stage, "bikes", []), BIKE_COLOR, self._get_bike_image, 0.4),
@@ -406,54 +389,62 @@ class PlayingScene(EmptyScene):
                 ):
                     _blit_scaled_centered(surface, goal_image, rect)
 
-    def _draw_running_crews(self, surface, crews, terrain, grid, cell_size):
-        for crew in crews:
-            if not 0 <= crew.row < terrain.rows:
+    def _draw_student_crowds(self, surface, crowds, terrain, grid, cell_size):
+        for crowd in crowds:
+            if not 0 <= crowd.row < terrain.rows:
                 continue
-            if self._draw_running_crew_runners(surface, crew, terrain, grid, cell_size):
+            if self._draw_student_crowd_runners(
+                surface, crowd, terrain, grid, cell_size
+            ):
                 continue
-            if crew.should_warn() and self._draw_running_crew_warning(
-                surface, crew, terrain, grid, cell_size
+            if crowd.should_warn() and self._draw_student_crowd_warning(
+                surface, crowd, terrain, grid, cell_size
             ):
                 continue
             for column in range(terrain.columns):
-                position = Position(row=crew.row, column=column)
+                position = Position(row=crowd.row, column=column)
                 rect = self._cell_rect(grid, cell_size, position).inflate(
                     -cell_size * 0.22, -cell_size * 0.34
                 )
-                if crew.occupies(position):
-                    pygame.draw.rect(surface, RUNNING_CREW_COLOR, rect, border_radius=4)
-                elif crew.should_warn():
-                    pygame.draw.rect(surface, RUNNING_CREW_COLOR, rect, 2, 4)
+                if crowd.occupies(position):
+                    pygame.draw.rect(
+                        surface, STUDENT_CROWD_COLOR, rect, border_radius=4
+                    )
+                elif crowd.should_warn():
+                    pygame.draw.rect(surface, STUDENT_CROWD_COLOR, rect, 2, 4)
 
-    def _draw_running_crew_warning(self, surface, crew, terrain, grid, cell_size):
-        if (crew_image := self._get_running_crew_warning_image(crew)) is None:
+    def _draw_student_crowd_warning(self, surface, crowd, terrain, grid, cell_size):
+        if (crowd_image := self._get_student_crowd_warning_image(crowd)) is None:
             return False
-        first = self._cell_rect(grid, cell_size, Position(crew.row, 0))
-        last = self._cell_rect(grid, cell_size, Position(crew.row, terrain.columns - 1))
+        first = self._cell_rect(grid, cell_size, Position(crowd.row, 0))
+        last = self._cell_rect(
+            grid, cell_size, Position(crowd.row, terrain.columns - 1)
+        )
         target_rect = first.union(last).inflate(0, round(cell_size * 0.2))
         with _clipped(surface, grid):
-            _blit_scaled_centered(surface, crew_image, target_rect)
+            _blit_scaled_centered(surface, crowd_image, target_rect)
         return True
 
-    def _draw_running_crew_runners(self, surface, crew, terrain, grid, cell_size):
+    def _draw_student_crowd_runners(self, surface, crowd, terrain, grid, cell_size):
         runner_images = []
-        columns = min(max(1, crew.columns), terrain.columns)
-        elapsed_time = crew.elapsed_time - crew.warning_time
+        columns = min(max(1, crowd.columns), terrain.columns)
+        elapsed_time = crowd.elapsed_time - crowd.warning_time
         if elapsed_time < 0.0:
             return False
-        motion = elapsed_time / RUNNING_CREW_TILE_DURATION
+        motion = elapsed_time / STUDENT_CROWD_TILE_DURATION
         whole_tiles, progress = int(motion), motion % 1
-        base_frame = int(elapsed_time / RUNNING_CREW_FRAME_DURATION)
-        cutoff_motion = crew.active_duration / RUNNING_CREW_TILE_DURATION
+        base_frame = int(elapsed_time / STUDENT_CROWD_FRAME_DURATION)
+        cutoff_motion = crowd.active_duration / STUDENT_CROWD_TILE_DURATION
         cutoff_tiles, cutoff_progress = int(cutoff_motion), cutoff_motion % 1
         min_tail_stream = (-1 if cutoff_progress > 0.0 else 0) - cutoff_tiles
         first_column = -1 if progress > 0.0 else 0
         for column in range(first_column, columns):
             stream_index = column - whole_tiles
-            if elapsed_time >= crew.active_duration and stream_index < min_tail_stream:
+            if elapsed_time >= crowd.active_duration and stream_index < min_tail_stream:
                 continue
-            runner_image = self._get_running_crew_runner_image(stream_index, base_frame)
+            runner_image = self._get_student_crowd_runner_image(
+                stream_index, base_frame
+            )
             if runner_image is None:
                 return False
             runner_images.append((column, _trim_transparent_margins(runner_image)))
@@ -461,7 +452,7 @@ class PlayingScene(EmptyScene):
             return False
         with _clipped(surface, grid):
             for column, runner_image in runner_images:
-                cell = self._cell_rect(grid, cell_size, Position(crew.row, column))
+                cell = self._cell_rect(grid, cell_size, Position(crowd.row, column))
                 rect = cell.move(round(progress * cell_size), 0)
                 target_rect = rect.inflate(
                     -round(cell_size * 0.08), -round(cell_size * 0.04)
@@ -555,20 +546,23 @@ class PlayingScene(EmptyScene):
         return self._get_asset_image(TURTLE_IMAGE_NAMES.get(direction, "turtle_right"))
 
     def _get_goal_image(self, stage_id):
-        if stage_id is not None:
-            return self._get_asset_image(f"goal_stage_{stage_id}")
-
-    def _get_running_crew_warning_image(self, crew):
-        frame = (
-            int(max(0.0, crew.elapsed_time) / RUNNING_CREW_FRAME_DURATION)
-            % RUNNING_CREW_FRAME_COUNT
+        return (
+            None
+            if stage_id is None
+            else self._get_asset_image(f"goal_stage_{stage_id}")
         )
-        return self._get_asset_image(f"running_crew_warning_frame_{frame}")
 
-    def _get_running_crew_runner_image(self, stream_index, base_frame):
-        runner = stream_index % RUNNING_CREW_RUNNER_COUNT
-        frame = (base_frame + stream_index) % RUNNING_CREW_FRAME_COUNT
-        return self._get_asset_image(f"running_crew_runner_{runner}_frame_{frame}")
+    def _get_student_crowd_warning_image(self, crowd):
+        frame = (
+            int(max(0.0, crowd.elapsed_time) / STUDENT_CROWD_FRAME_DURATION)
+            % STUDENT_CROWD_FRAME_COUNT
+        )
+        return self._get_asset_image(f"student_crowd_warning_frame_{frame}")
+
+    def _get_student_crowd_runner_image(self, stream_index, base_frame):
+        runner = stream_index % STUDENT_CROWD_RUNNER_COUNT
+        frame = (base_frame + stream_index) % STUDENT_CROWD_FRAME_COUNT
+        return self._get_asset_image(f"student_crowd_runner_{runner}_frame_{frame}")
 
     def _cell_rect(self, grid_rect, cell_size: int, position: Position):
         left = grid_rect.left + round(position.column * cell_size)

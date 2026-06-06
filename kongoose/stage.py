@@ -15,26 +15,22 @@ class GameSprite:
     speed: float = 0.0
     distance_progress: float = 0.0
     is_active: bool = True
-    became_active: bool = False
 
     def __post_init__(self) -> None:
         self._initial_state = vars(self).copy()
 
     def reset(self) -> None:
         self.__dict__.update(self._initial_state)
-        self.became_active = False
 
     def activate(self) -> None:
         self.reset()
         self.is_active = True
-        self.became_active = True
 
     def deactivate(self) -> None:
         self.reset()
         self.is_active = False
 
     def update(self, dt: float) -> None:
-        self.became_active = False
         if not self.is_active or self.speed <= 0:
             return
         self.distance_progress += self.speed * dt
@@ -51,16 +47,36 @@ class GameSprite:
     def occupies(self, position: Position) -> bool:
         return position in self.get_positions()
 
-    def occupies(self, position: Position) -> bool:
-        return position in self.get_positions()
-
 
 class Bike(GameSprite):
     pass
 
 
 @dataclass
-class RunningCrew:
+class BikeLane:
+    row: int
+    direction: str
+    speed: float
+    spawn_gap: float
+    initial_offset: float = 0.0
+    max_active: int = 2
+    time_until_spawn: float = 0.0
+
+    def reset(self) -> None:
+        self.time_until_spawn = self.initial_offset
+
+    def update(self, dt: float) -> None:
+        self.time_until_spawn -= dt
+
+    def consume_spawn(self) -> bool:
+        if self.time_until_spawn > TIME_EPSILON:
+            return False
+        self.time_until_spawn += self.spawn_gap
+        return True
+
+
+@dataclass
+class StudentCrowd:
     row: int
     columns: int
     warning_time: float
@@ -81,8 +97,14 @@ class RunningCrew:
         return self.elapsed_time < self.warning_time
 
     def is_active(self) -> bool:
-        end_time = self.warning_time + self.active_duration
-        return self.warning_time <= self.elapsed_time < end_time
+        return (
+            self.warning_time
+            <= self.elapsed_time
+            < self.warning_time + self.active_duration
+        )
+
+    def is_present(self) -> bool:
+        return self.elapsed_time < self.warning_time + self.active_duration
 
     def occupies(self, position: Position) -> bool:
         return (
@@ -107,38 +129,17 @@ class Player:
     facing_direction: str = Direction.DOWN
     mounted_turtle: Turtle | None = None
 
-    def move_to(self, position: Position) -> None:
-        self.position = position
-
-    def face(self, direction: str) -> None:
-        self.facing_direction = direction
-
-    def move_with(self, turtle: Turtle) -> None:
-        self.position = turtle.position
-
-    def ride_turtle(self, turtle: Turtle) -> None:
-        self.mounted_turtle = turtle
-
-    def leave_turtle(self) -> None:
-        self.mounted_turtle = None
-
 
 @dataclass
 class Stage:
     terrain_map: TerrainMap
     player: Player
     bikes: list[Bike] = field(default_factory=list)
-    running_crews: list[RunningCrew] = field(default_factory=list)
+    student_crowds: list[StudentCrowd] = field(default_factory=list)
     turtles: list[Turtle] = field(default_factory=list)
-    bike_waves_enabled: bool = False
-    bike_wave_interval: float = 1.0
-    bike_wave_warning_lookahead: float = 1.0
-    bike_wave_batch_size: int = 1
+    bike_lanes: list[BikeLane] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self._bike_wave_timer = 0.0
-        self._next_bike_index = 0
-        self._warning_bikes: list[Bike] = []
         self.failure_reason: FailureReason | None = None
         self._initial_player_state = (
             self.player.position,
@@ -149,14 +150,10 @@ class Stage:
         self.failure_reason = None
         self.player.position, self.player.facing_direction = self._initial_player_state
         self.player.mounted_turtle = None
-        for actor in self.bikes + self.turtles + self.running_crews:
+        for actor in self.bikes + self.turtles + self.student_crowds:
             actor.reset()
-        if self.bike_waves_enabled:
-            for bike in self.bikes:
-                bike.deactivate()
-            self._bike_wave_timer = 0.0
-            self._next_bike_index = 0
-            self._warning_bikes = []
+        for lane in self.bike_lanes:
+            lane.reset()
 
     def move_player(self, direction: str) -> str:
         self.player.facing_direction = direction
@@ -168,14 +165,11 @@ class Stage:
         return self.evaluate_player_state()
 
     def update(self, dt: float) -> str:
-        if self.bike_waves_enabled:
-            self._bike_wave_timer += dt
-        warning_prepared = self._prepare_bike_wave_warning()
         for sprite in self.bikes + self.turtles:
             sprite.update(dt)
-        for crew in self.running_crews:
-            crew.update(dt)
-        if self.bike_waves_enabled:
+        for crowd in self.student_crowds:
+            crowd.update(dt)
+        if self.bike_lanes:
             self._deactivate_offscreen_bikes()
         else:
             self._keep_position_sprites_in_bounds(self.bikes)
@@ -185,24 +179,14 @@ class Stage:
         self._keep_position_sprites_in_bounds(self.turtles)
         if self.player.mounted_turtle is not None:
             self.player.position = self.player.mounted_turtle.position
-        bike_appeared = self._activate_bike_wave_if_due()
-        if bike_appeared or warning_prepared:
-            return models.UPDATE_BIKE_AMBIENCE
-        if any(crew.should_warn() for crew in self.running_crews):
+        self._update_bike_lanes(dt)
+        if any(crowd.should_warn() for crowd in self.student_crowds):
             return models.UPDATE_WARNING
-        if any(crew.became_active for crew in self.running_crews):
-            return models.UPDATE_RUNNING_CREW_ACTIVE
+        if any(crowd.became_active for crowd in self.student_crowds):
+            return models.UPDATE_STUDENT_CROWD_ACTIVE
         if self.player.mounted_turtle is not None:
             return models.UPDATE_TURTLE_RIDE
-        if not self.bike_waves_enabled and self.bikes:
-            return models.UPDATE_BIKE_AMBIENCE
         return models.UPDATE_SAFE
-
-    def peek_warning_bike_row(self) -> int | None:
-        return rows[0] if (rows := self.peek_warning_bike_rows()) else None
-
-    def peek_warning_bike_rows(self) -> tuple[int, ...]:
-        return tuple(bike.position.row for bike in self._warning_bikes)
 
     def evaluate_player_state(self) -> str:
         self.failure_reason = None
@@ -214,7 +198,7 @@ class Stage:
         player_position = self.player.position
         for actors, reason in (
             (self.bikes, FailureReason.HIT_BIKE),
-            (self.running_crews, FailureReason.HIT_RUNNING_CREW),
+            (self.student_crowds, FailureReason.HIT_STUDENT_CROWD),
         ):
             if self._actor_at(actors, player_position) is not None:
                 return self._fail(reason)
@@ -239,42 +223,36 @@ class Stage:
     def _actor_at(self, actors, position: Position):
         return next((actor for actor in actors if actor.occupies(position)), None)
 
-    def _activate_bike_wave_if_due(self) -> bool:
-        if not self.bike_waves_enabled or not self.bikes:
-            return False
-        if self._bike_wave_timer + TIME_EPSILON < self.bike_wave_interval:
-            return False
-        if not (bikes := self._warning_bikes or self._next_bikes_in_script()):
-            return False
-        for bike in bikes:
-            bike.activate()
-        self._warning_bikes = []
-        self._bike_wave_timer = 0.0
-        self._next_bike_index += len(bikes)
-        return True
+    def _update_bike_lanes(self, dt: float) -> None:
+        for lane in self.bike_lanes:
+            lane.update(dt)
+            if lane.consume_spawn() and self._active_bike_count(lane) < lane.max_active:
+                self._activate_bike_from_lane(lane)
 
-    def _next_bikes_in_script(self) -> list[Bike]:
-        if not self.bikes:
-            return []
-        batch_size = max(1, min(self.bike_wave_batch_size, len(self.bikes)))
-        return [
-            self.bikes[(self._next_bike_index + offset) % len(self.bikes)]
-            for offset in range(batch_size)
-        ]
+    def _active_bike_count(self, lane: BikeLane) -> int:
+        return sum(
+            1 for bike in self.bikes if bike.is_active and bike.position.row == lane.row
+        )
 
-    def _prepare_bike_wave_warning(self) -> bool:
-        lookahead = self.bike_wave_warning_lookahead
-        if not self.bike_waves_enabled or not self.bikes or self._warning_bikes:
-            return False
-        if not TIME_EPSILON < lookahead < self.bike_wave_interval - TIME_EPSILON:
-            return False
-        warning_time = max(0.0, self.bike_wave_interval - lookahead)
-        if self._bike_wave_timer + TIME_EPSILON < warning_time:
-            return False
-        if not (candidates := self._next_bikes_in_script()):
-            return False
-        self._warning_bikes = candidates
-        return True
+    def _activate_bike_from_lane(self, lane: BikeLane) -> None:
+        bike = next(
+            (
+                bike
+                for bike in self.bikes
+                if not bike.is_active and bike.position.row == lane.row
+            ),
+            None,
+        )
+        if bike is None:
+            return
+        column = (
+            0 if lane.direction == Direction.RIGHT else self.terrain_map.columns - 1
+        )
+        bike.position = Position(lane.row, column)
+        bike.direction = lane.direction
+        bike.speed = lane.speed
+        bike.distance_progress = 0.0
+        bike.is_active = True
 
     def _deactivate_offscreen_bikes(self) -> None:
         columns = self.terrain_map.columns

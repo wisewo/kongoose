@@ -12,7 +12,7 @@ class TerrainType:
 
 class FailureReason(Enum):
     HIT_BIKE = "hit_bike"
-    HIT_RUNNING_CREW = "hit_running_crew"
+    HIT_STUDENT_CROWD = "hit_student_crowd"
     FELL_IN_RIVER = "fell_in_river"
     CARRIED_OFF_SCREEN = "carried_off_screen"
 
@@ -20,8 +20,7 @@ class FailureReason(Enum):
 class SoundCue:
     MOVE_START, MOVE_SUCCESS, MOVE = "move_start", "move_success", "move"
     BLOCKED, TURTLE, BIKE_AMBIENCE = "blocked", "turtle", "bike_ambience"
-    RUNNING_CREW_WARNING = "running_crew_warning"
-    RUNNING_CREW_ACTIVE = "running_crew_active"
+    STUDENT_CROWD, WATER_AMBIENCE = "student_crowd", "water_ambience"
     LAKE_SPLASH, FAILURE_SCREEN = "lake_splash", "failure_screen"
     CLEAR_SCREEN, UI_SELECT = "clear_screen", "ui_select"
     BACKGROUND_MUSIC = "background_music"
@@ -29,14 +28,9 @@ class SoundCue:
 
 MOVE_BLOCKED, MOVE_MOVED = "blocked", "moved"
 MOVE_CLEARED, MOVE_FAILED = "cleared", "failed"
-
 UPDATE_SAFE, UPDATE_WARNING = "safe", "warning"
-UPDATE_RUNNING_CREW_ACTIVE = "running_crew_active"
-UPDATE_TURTLE_RIDE, UPDATE_BIKE_AMBIENCE, UPDATE_FAILED = (
-    "turtle_ride",
-    "bike_ambience",
-    "failed",
-)
+UPDATE_STUDENT_CROWD_ACTIVE, UPDATE_TURTLE_RIDE = "student_crowd_active", "turtle_ride"
+UPDATE_FAILED = "failed"
 
 
 @dataclass

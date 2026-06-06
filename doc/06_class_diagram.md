@@ -17,7 +17,7 @@
 - 목적지는 별도 `Goal` 클래스로 두지 않고 `TerrainType.GOAL`로 표현한다.
 - `MoveResult`와 `StageUpdateResult`는 `Stage`가 판정한 결과를 `Game`에 전달하는 Result Object이다.
 - `Direction`, `MoveResultType`, `StageUpdateResultType`, `FailureReason`은 판정 결과와 실패 원인을 명확히 하기 위한 열거형이다.
-- `SoundManager`는 소리 종류별 메서드를 따로 두지 않고 `SoundCue`를 받아 재생한다.
+- `SoundManager`는 소리 종류별 메서드를 따로 두지 않고 `SoundCue`를 받아 재생하며, 필요한 경우 1회 재생 볼륨을 적용한다. 강물처럼 반복 재생되는 큐는 `stop(cue)`로 정지한다.
 - 선택 기능과 보류 기능은 포함하지 않는다.
 
 ## Mermaid
@@ -99,7 +99,8 @@ classDiagram
         -terrain_map
         -player
         -bikes
-        -running_crews
+        -bike_lanes
+        -student_crowds
         -turtles
         +initialize()
         +move_player(direction)
@@ -147,12 +148,9 @@ classDiagram
     }
 
     class Player {
-        -name
+        -position
+        -facing_direction
         -mounted_turtle
-        +move_to(position)
-        +move_with(turtle)
-        +ride_turtle(turtle)
-        +leave_turtle()
     }
 
     class Bike {
@@ -160,7 +158,19 @@ classDiagram
         -direction
     }
 
-    class RunningCrew {
+    class BikeLane {
+        -row
+        -direction
+        -speed
+        -spawn_gap
+        -initial_offset
+        -max_active
+        +reset()
+        +update(dt)
+        +consume_spawn()
+    }
+
+    class StudentCrowd {
         -speed
         -direction
         -warning_time
@@ -215,7 +225,6 @@ classDiagram
         +is_safe()
         +is_warning()
         +is_turtle_ride()
-        +is_bike_appearance()
         +is_failure()
         +get_failure_reason()
     }
@@ -224,16 +233,15 @@ classDiagram
         <<enumeration>>
         SAFE
         WARNING
-        RUNNING_CREW_ACTIVE
+        STUDENT_CROWD_ACTIVE
         TURTLE_RIDE
-        BIKE_AMBIENCE
         FAILURE
     }
 
     class FailureReason {
         <<enumeration>>
         HIT_BIKE
-        HIT_RUNNING_CREW
+        HIT_STUDENT_CROWD
         FELL_IN_RIVER
         CARRIED_OFF_SCREEN
     }
@@ -256,7 +264,8 @@ classDiagram
     class SoundManager {
         -sounds
         +load()
-        +play(cue)
+        +play(cue, loops=0, volume=None)
+        +stop(cue)
     }
 
     class SoundCue {
@@ -266,8 +275,8 @@ classDiagram
         BLOCKED
         TURTLE
         BIKE_AMBIENCE
-        RUNNING_CREW_WARNING
-        RUNNING_CREW_ACTIVE
+        STUDENT_CROWD
+        WATER_AMBIENCE
         LAKE_SPLASH
         FAILURE_SCREEN
         CLEAR_SCREEN
@@ -303,7 +312,8 @@ classDiagram
     Stage --> TerrainMap
     Stage --> Player
     Stage --> Bike
-    Stage --> RunningCrew
+    Stage --> BikeLane
+    Stage --> StudentCrowd
     Stage --> Turtle
     Stage ..> MoveResult
     Stage ..> StageUpdateResult
@@ -317,7 +327,7 @@ classDiagram
     GameSprite --> Position : positions
     GameSprite <|-- Player
     GameSprite <|-- Bike
-    GameSprite <|-- RunningCrew
+    GameSprite <|-- StudentCrowd
     GameSprite <|-- Turtle
     Player --> Turtle : mounted_turtle
 
@@ -343,19 +353,20 @@ classDiagram
 | Direction | 플레이어와 동적 객체의 이동 방향 표현 |
 | GameSprite | 위치 점유와 시간 갱신이 필요한 스테이지 객체의 공통 추상화 |
 | Player | 건구스의 현재 위치, 이동, 자라 탑승 상태 관리 |
-| Bike | 육지 구간의 빠른 웨이브형 장애물 후보 |
-| RunningCrew | 경고 후 등장하는 한 줄 특수 장애물 |
+| Bike | 육지 구간을 이동하는 자전거 장애물 |
+| BikeLane | 자전거 행별 방향, 속도, 스폰 간격, 시작 오프셋, 최대 동시 등장 수 관리 |
+| StudentCrowd | 경고 후 등장하는 한 줄 특수 장애물 |
 | Turtle | 강 구간 이동 발판 |
 | Timer | 스테이지별 경과 시간 측정 |
 | StarRating | 클리어 시간 기반 별점 계산 |
 | MoveResult | 플레이어 이동 결과와 이동 직후 실패 원인 전달 |
 | MoveResultType | 플레이어 이동 결과 종류 표현 |
 | StageUpdateResult | 육지/강 구간 갱신 결과와 갱신 직후 실패 원인 전달 |
-| StageUpdateResultType | 안전, 경고, 자라 탑승, 자전거 웨이브 등장, 실패 같은 게임 루프 갱신 결과 종류 표현 |
-| FailureReason | 자전거 충돌, 러닝크루 충돌, 강 추락, 화면 밖 밀림 같은 실패 원인 표현 |
+| StageUpdateResultType | 안전, 경고, 학생 무리 등장, 자라 탑승, 실패 같은 게임 루프 갱신 결과 종류 표현 |
+| FailureReason | 자전거 충돌, 학생 무리 충돌, 강 추락, 화면 밖 밀림 같은 실패 원인 표현 |
 | Progress | 스테이지 해금 상태와 최고 별점 규칙 관리 |
 | SaveManager | 진행 상태 저장/불러오기 |
-| SoundManager | `SoundCue`에 해당하는 사운드 로딩과 재생 관리 |
+| SoundManager | `SoundCue`에 해당하는 사운드 로딩과 재생, 1회 재생 볼륨 적용, 큐별 정지 관리 |
 | SoundCue | 재생할 사운드 종류 표현 |
 | ResourceManager | 이미지 리소스 로딩과 조회 |
 
@@ -366,7 +377,7 @@ classDiagram
 | FR-01, FR-02 | Game, Scene |
 | FR-03, FR-04, FR-14 | StageSelectScene, Stage, Progress, SaveManager |
 | FR-05, FR-06 | PlayingScene, Stage, Player, Position, Direction, TerrainMap |
-| FR-07, FR-08, FR-09 | GameSprite, Bike, RunningCrew, Stage, StageUpdateResult, FailureReason, SoundManager |
+| FR-07, FR-08, FR-09 | GameSprite, Bike, BikeLane, StudentCrowd, Stage, StageUpdateResult, FailureReason, SoundManager |
 | FR-10, FR-11, FR-12 | GameSprite, Turtle, Stage, StageUpdateResult, FailureReason, Player, TerrainMap |
 | FR-13, FR-15 | Game, FailedScene, ResultScene, Stage |
 | FR-16, FR-17, FR-18 | PlayingScene, ResultScene, TerrainMap, TerrainType, Timer, StarRating, Stage |

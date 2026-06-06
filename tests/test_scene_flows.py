@@ -6,12 +6,11 @@ import pygame
 
 from kongoose.game import Game
 from kongoose.models import (
-    MOVE_BLOCKED,
     MOVE_CLEARED,
     MOVE_FAILED,
     MOVE_MOVED,
-    UPDATE_BIKE_AMBIENCE,
     UPDATE_SAFE,
+    UPDATE_STUDENT_CROWD_ACTIVE,
     UPDATE_WARNING,
     Direction,
     FailureReason,
@@ -22,8 +21,8 @@ from kongoose.models import (
 from kongoose.scenes import (
     BIKE_COLOR,
     DEFAULT_BACKGROUND_COLOR,
-    RUNNING_CREW_COLOR,
-    RUNNING_CREW_TILE_DURATION,
+    STUDENT_CROWD_COLOR,
+    STUDENT_CROWD_TILE_DURATION,
     TERRAIN_STYLES,
     TURTLE_COLOR,
     FailedScene,
@@ -32,7 +31,7 @@ from kongoose.scenes import (
     ResultScene,
     StageSelectScene,
 )
-from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
+from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
 from kongoose.terrain import TerrainMap
 
 
@@ -80,75 +79,6 @@ class StageStub:
         self.update_count += 1
         return self.next_update_result
 
-    def peek_warning_bike_rows(self) -> tuple[int, ...]:
-        return ()
-
-
-class StageWarningStub:
-    def __init__(
-        self, player_row: int = 12, warning_row: int | None = 12, rows: int = 24
-    ) -> None:
-        self.player = type("Player", (), {"position": Position(player_row, 0)})()
-        self.terrain_map = TerrainMap([[TerrainType.LAND] for _ in range(rows)])
-        self.failure_reason: FailureReason | None = None
-        self.warning_rows = () if warning_row is None else (warning_row,)
-
-    def peek_warning_bike_rows(self) -> tuple[int, ...]:
-        return self.warning_rows
-
-
-class BikeWarningVisibilityStub:
-    def __init__(self) -> None:
-        self.player = type("Player", (), {"position": Position(10, 0)})()
-        self.warning_rows = (16,)
-        self.terrain_map = TerrainMap(
-            [[TerrainType.LAND for _ in range(10)] for _ in range(24)]
-        )
-        self.failure_reason = None
-
-    def initialize(self) -> None:
-        return None
-
-    def update(self, dt: float) -> str:
-        return UPDATE_SAFE
-
-    def peek_warning_bike_rows(self) -> tuple[int, ...]:
-        return self.warning_rows
-
-
-class LegacyWarningRowStub:
-    def __init__(self) -> None:
-        self.warning_row = 12
-
-
-class StageWarningStub:
-    def __init__(
-        self, player_row: int = 12, warning_row: int = 12, rows: int = 24
-    ) -> None:
-        self.player = type("Player", (), {"position": Position(player_row, 0)})()
-        self.terrain_map = TerrainMap([[TerrainType.LAND] for _ in range(rows)])
-        self.failure_reason: FailureReason | None = None
-        self.warning_row = warning_row
-
-    def peek_warning_bike_row(self) -> int | None:
-        return self.warning_row
-
-
-class BikeWarningVisibilityStub:
-    def __init__(self) -> None:
-        self.player = type("Player", (), {"position": Position(10, 0)})()
-        self.warning_row: int | None = 16
-        self.terrain_map = TerrainMap(
-            [[TerrainType.LAND for _ in range(10)] for _ in range(24)]
-        )
-        self.failure_reason = None
-
-    def initialize(self) -> None:
-        return None
-
-    def update(self, dt: float) -> str:
-        return UPDATE_SAFE
-
 
 class TimerStub:
     def __init__(self) -> None:
@@ -173,14 +103,31 @@ class SoundManagerStub:
     def __init__(self) -> None:
         self.played_cues: list[tuple[str, int]] = []
         self.played_calls: list[dict] = []
+        self.stopped_cues: list[str] = []
 
-    def play(self, cue: str, loops: int = 0, cooldown: float = 0.0, **_kwargs) -> bool:
+    def play(self, cue: str, loops: int = 0, volume=None) -> bool:
         self.played_cues.append((cue, loops))
-        self.played_calls.append({"cue": cue, "loops": loops, **_kwargs})
+        self.played_calls.append({"cue": cue, "loops": loops, "volume": volume})
         return True
 
-    def stop(self, _cue: str) -> None:
-        return None
+    def stop(self, cue: str) -> None:
+        self.stopped_cues.append(cue)
+
+
+class RandomStub:
+    def __init__(self, uniforms: list[float], randints: list[int]) -> None:
+        self.uniforms = uniforms
+        self.randints = randints
+        self.uniform_calls: list[tuple[float, float]] = []
+        self.randint_calls: list[tuple[int, int]] = []
+
+    def uniform(self, minimum: float, maximum: float) -> float:
+        self.uniform_calls.append((minimum, maximum))
+        return self.uniforms.pop(0)
+
+    def randint(self, minimum: int, maximum: int) -> int:
+        self.randint_calls.append((minimum, maximum))
+        return self.randints.pop(0)
 
 
 def key_event(key: int) -> pygame.event.Event:
@@ -235,13 +182,13 @@ def register_goal_test_images(game: Game) -> None:
         game.resource_manager.register_image(f"goal_stage_{stage_id}", image)
 
 
-def register_running_crew_test_images(game: Game) -> None:
+def register_student_crowd_test_images(game: Game) -> None:
     warning_color = (199, 141, 82)
     for index in range(4):
         image = pygame.Surface((32, 12), pygame.SRCALPHA)
         image.fill((*warning_color, 255))
         game.resource_manager.register_image(
-            f"running_crew_warning_frame_{index}", image
+            f"student_crowd_warning_frame_{index}", image
         )
 
     runner_colors = [
@@ -259,7 +206,7 @@ def register_running_crew_test_images(game: Game) -> None:
             image = pygame.Surface((24, 32), pygame.SRCALPHA)
             image.fill((*color, 255))
             game.resource_manager.register_image(
-                f"running_crew_runner_{runner_index}_frame_{frame_index}",
+                f"student_crowd_runner_{runner_index}_frame_{frame_index}",
                 image,
             )
 
@@ -326,6 +273,7 @@ def test_playing_scene_moves_player_updates_stage_and_returns_to_select() -> Non
     assert stage.moves == [Direction.UP]
     assert stage.update_count == 1
 
+    game.sound_manager = SoundManagerStub()
     game.current_scene.handle_event(key_event(pygame.K_ESCAPE))
 
     assert isinstance(game.current_scene, StageSelectScene)
@@ -357,8 +305,8 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
         ),
         player=Player(Position(row=0, column=1)),
         bikes=[Bike(position=Position(row=0, column=2))],
-        running_crews=[
-            RunningCrew(
+        student_crowds=[
+            StudentCrowd(
                 row=1,
                 columns=6,
                 warning_time=0.0,
@@ -373,7 +321,7 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
     game.current_stage_id = 1
     register_bike_test_images(game)
     register_turtle_test_images(game)
-    register_running_crew_test_images(game)
+    register_student_crowd_test_images(game)
 
     game.current_scene.draw(surface)
     rendered_colors = collect_surface_colors(surface)
@@ -417,76 +365,147 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
     assert (30, 220, 80) not in rendered_colors
 
 
-def test_blocked_move_keeps_next_bike_appear_sound() -> None:
-    game = Game(initial_scene=PlayingScene())
-    game.current_stage = StageWarningStub(player_row=12, warning_row=12)
+def test_bike_ambience_does_not_play_on_stages_without_bikes() -> None:
+    game = Game(
+        initial_scene=PlayingScene(),
+        rng=RandomStub(uniforms=[0.1], randints=[]),
+    )
+    game.current_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.START]]),
+        player=Player(Position(row=0, column=0)),
+    )
     game.sound_manager = SoundManagerStub()
 
-    game._handle_move_result(MOVE_BLOCKED)
-    game._handle_stage_update_result(UPDATE_BIKE_AMBIENCE)
+    game.update_stage(0.2)
+
+    assert game.sound_manager.played_cues == []
+
+
+def test_bike_ambience_plays_random_bells_with_random_volume() -> None:
+    game = Game(
+        initial_scene=PlayingScene(),
+        rng=RandomStub(uniforms=[1.0, 0.2, 0.65, 1.0, 4.0], randints=[3]),
+    )
+    game.current_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.START, TerrainType.LAND]]),
+        player=Player(Position(row=0, column=0)),
+        bikes=[Bike(Position(row=0, column=1))],
+    )
+    game.sound_manager = SoundManagerStub()
+
+    game.update_stage(0.5)
+    assert game.sound_manager.played_cues == []
+
+    game.update_stage(0.5)
 
     assert game.sound_manager.played_cues == [
-        (SoundCue.BLOCKED, 0),
         (SoundCue.BIKE_AMBIENCE, 0),
+        (SoundCue.BIKE_AMBIENCE, 0),
+        (SoundCue.BIKE_AMBIENCE, 0),
+    ]
+    assert [call["volume"] for call in game.sound_manager.played_calls] == [
+        0.2,
+        0.65,
+        1.0,
     ]
 
 
-def test_offscreen_bike_warning_row_does_not_play_sound() -> None:
-    game = Game(initial_scene=PlayingScene())
-    game.current_stage = StageWarningStub(player_row=12, warning_row=0)
+def test_start_stage_plays_water_ambience_on_river_stage() -> None:
+    game = Game()
     game.sound_manager = SoundManagerStub()
 
-    game._play_bike_warning_from_stage()
+    game.start_stage(3)
 
+    assert (SoundCue.WATER_AMBIENCE, -1) in game.sound_manager.played_cues
+    assert game.sound_manager.played_calls[-1]["volume"] == 0.45
+
+
+def test_starting_non_river_stage_stops_water_ambience() -> None:
+    game = Game()
+    game.sound_manager = SoundManagerStub()
+    game.start_stage(3)
+    game.sound_manager.played_cues.clear()
+    game.sound_manager.stopped_cues.clear()
+
+    game.start_stage(1)
+
+    assert game.sound_manager.stopped_cues == [SoundCue.WATER_AMBIENCE]
     assert game.sound_manager.played_cues == []
 
 
-def test_inview_bike_warning_row_plays_appearance_sound() -> None:
-    game = Game(initial_scene=PlayingScene())
-    game.current_stage = StageWarningStub(player_row=12, warning_row=12)
+def test_failing_river_stage_stops_water_ambience() -> None:
+    game = Game()
     game.sound_manager = SoundManagerStub()
+    game.start_stage(3)
+    game.sound_manager.stopped_cues.clear()
 
-    game._play_bike_warning_from_stage()
+    game.fail_current_stage(FailureReason.FELL_IN_RIVER)
 
-    assert game.sound_manager.played_cues == [(SoundCue.BIKE_AMBIENCE, 0)]
+    assert game.sound_manager.stopped_cues == [SoundCue.WATER_AMBIENCE]
 
 
-def test_legacy_bike_warning_row_attribute_is_ignored() -> None:
+def test_student_crowd_sound_plays_on_active_event_without_channel_state() -> None:
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = LegacyWarningRowStub()
-
-    assert game._pending_bike_warning_rows() == ()
-
-
-def test_offscreen_bike_warning_waits_until_visible_row() -> None:
-    game = Game(initial_scene=PlayingScene())
-    game.current_stage = BikeWarningVisibilityStub()
-    game.sound_manager = SoundManagerStub()
-
-    game.update_stage(0.016)
-    assert game.sound_manager.played_cues == []
-
-    game.current_stage.player.position = Position(20, 0)
-    game.update_stage(0.016)
-    game.update_stage(0.016)
-
-    assert game.sound_manager.played_cues == [(SoundCue.BIKE_AMBIENCE, 0)]
-
-
-def test_running_crew_warning_uses_channel_separate_from_player_move() -> None:
-    game = Game(initial_scene=PlayingScene())
-    game.current_stage = StageStub()
+    game.current_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.LAND for _column in range(3)]]),
+        player=Player(Position(row=0, column=0)),
+        student_crowds=[
+            StudentCrowd(row=0, columns=3, warning_time=1.0, active_duration=4.17)
+        ],
+    )
     game.sound_manager = SoundManagerStub()
 
     game._handle_move_result(MOVE_MOVED)
     game._handle_stage_update_result(UPDATE_WARNING)
+    game._handle_stage_update_result(UPDATE_STUDENT_CROWD_ACTIVE)
 
-    assert game.sound_manager.played_calls[0]["cue"] == SoundCue.MOVE_START
-    assert game.sound_manager.played_calls[1]["cue"] == SoundCue.RUNNING_CREW_WARNING
-    assert (
-        game.sound_manager.played_calls[0]["channel_index"]
-        != game.sound_manager.played_calls[1]["channel_index"]
+    assert game.sound_manager.played_cues == [
+        (SoundCue.MOVE_START, 0),
+        (SoundCue.STUDENT_CROWD, 0),
+    ]
+
+
+def test_student_crowd_sound_is_not_managed_as_continuous_channel() -> None:
+    from kongoose.stage import StudentCrowd
+
+    game = Game(initial_scene=PlayingScene())
+    game.sound_manager = SoundManagerStub()
+    game.current_stage = Stage(
+        terrain_map=TerrainMap(
+            [[TerrainType.LAND for _column in range(3)] for _row in range(2)]
+        ),
+        player=Player(Position(row=1, column=0)),
+        student_crowds=[
+            StudentCrowd(row=0, columns=3, warning_time=1.0, active_duration=4.17)
+        ],
     )
+
+    game.update_stage(0.25)
+    game.update_stage(0.75)
+    game.update_stage(4.68)
+
+    assert [cue for cue, _loops in game.sound_manager.played_cues] == [
+        SoundCue.STUDENT_CROWD
+    ]
+
+
+def test_turtle_boarding_plays_turtle_sound_once() -> None:
+    game = Game(initial_scene=PlayingScene())
+    game.sound_manager = SoundManagerStub()
+    turtle = Turtle(position=Position(row=0, column=1))
+    game.current_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.START, TerrainType.RIVER]]),
+        player=Player(Position(row=0, column=0)),
+        turtles=[turtle],
+    )
+
+    game.current_scene.handle_event(key_event(pygame.K_RIGHT))
+    game.current_scene.update(0.3)
+
+    assert game.sound_manager.played_cues == [
+        (SoundCue.TURTLE, 0),
+        (SoundCue.MOVE_SUCCESS, 0),
+    ]
 
 
 def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
@@ -505,7 +524,7 @@ def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
     assert game.resource_manager.has_image("player_goose_left")
     assert not game.resource_manager.has_image("player_goose_right")
 
-    player.face(Direction.RIGHT)
+    player.facing_direction = Direction.RIGHT
     game.current_scene.draw(surface)
 
     assert game.resource_manager.has_image("player_goose_right")
@@ -794,13 +813,13 @@ def test_position_sprites_draw_turtle_image_when_registered() -> None:
     assert (34, 220, 120) in rendered_colors
 
 
-def test_running_crew_warning_draws_registered_warning_frame() -> None:
+def test_student_crowd_warning_draws_registered_warning_frame() -> None:
     pygame.font.init()
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
-    register_running_crew_test_images(game)
-    crew = RunningCrew(
+    register_student_crowd_test_images(game)
+    crowd = StudentCrowd(
         row=0,
         columns=3,
         warning_time=1.0,
@@ -808,9 +827,9 @@ def test_running_crew_warning_draws_registered_warning_frame() -> None:
         elapsed_time=0.5,
     )
 
-    game.current_scene._draw_running_crews(
+    game.current_scene._draw_student_crowds(
         surface,
-        [crew],
+        [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
@@ -818,16 +837,16 @@ def test_running_crew_warning_draws_registered_warning_frame() -> None:
     rendered_colors = collect_surface_colors(surface)
 
     assert (199, 141, 82) in rendered_colors
-    assert RUNNING_CREW_COLOR not in rendered_colors
+    assert STUDENT_CROWD_COLOR not in rendered_colors
 
 
-def test_running_crew_active_draws_registered_runner_in_each_cell() -> None:
+def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
     pygame.font.init()
     surface = pygame.Surface((820, 100))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
-    register_running_crew_test_images(game)
-    crew = RunningCrew(
+    register_student_crowd_test_images(game)
+    crowd = StudentCrowd(
         row=0,
         columns=8,
         warning_time=0.2,
@@ -835,9 +854,9 @@ def test_running_crew_active_draws_registered_runner_in_each_cell() -> None:
         elapsed_time=0.2,
     )
 
-    game.current_scene._draw_running_crews(
+    game.current_scene._draw_student_crowds(
         surface,
-        [crew],
+        [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(8)]]),
         pygame.Rect(0, 0, 800, 100),
         100,
@@ -853,11 +872,11 @@ def test_running_crew_active_draws_registered_runner_in_each_cell() -> None:
     assert surface.get_at((750, 50))[:3] == (232, 121, 31)
 
 
-def test_running_crew_visual_tile_duration_is_three_times_faster() -> None:
-    assert RUNNING_CREW_TILE_DURATION == 0.08
+def test_student_crowd_visual_tile_duration_is_three_times_faster() -> None:
+    assert STUDENT_CROWD_TILE_DURATION == 0.08
 
 
-def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None:
+def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> None:
     pygame.font.init()
     active_color = (29, 211, 188)
     surface = pygame.Surface((320, 100))
@@ -868,17 +887,17 @@ def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None
         image.fill((0, 0, 0, 0))
         image.fill((*active_color, 255), pygame.Rect(36, 0, 24, 12))
         game.resource_manager.register_image(
-            f"running_crew_runner_0_frame_{index}", image
+            f"student_crowd_runner_0_frame_{index}", image
         )
     for runner_index in range(1, 4):
         for frame_index in range(4):
             image = pygame.Surface((24, 32), pygame.SRCALPHA)
             image.fill((*active_color, 255))
             game.resource_manager.register_image(
-                f"running_crew_runner_{runner_index}_frame_{frame_index}",
+                f"student_crowd_runner_{runner_index}_frame_{frame_index}",
                 image,
             )
-    crew = RunningCrew(
+    crowd = StudentCrowd(
         row=0,
         columns=3,
         warning_time=0.2,
@@ -886,9 +905,9 @@ def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None
         elapsed_time=0.2,
     )
 
-    game.current_scene._draw_running_crews(
+    game.current_scene._draw_student_crowds(
         surface,
-        [crew],
+        [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
@@ -897,23 +916,23 @@ def test_running_crew_active_trims_transparent_margins_per_runner_cell() -> None
     assert surface.get_at((50, 50))[:3] == active_color
 
 
-def test_running_crew_active_moves_runners_right_and_refills_from_left() -> None:
+def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> None:
     pygame.font.init()
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
-    register_running_crew_test_images(game)
-    crew = RunningCrew(
+    register_student_crowd_test_images(game)
+    crowd = StudentCrowd(
         row=0,
         columns=3,
         warning_time=0.2,
         active_duration=1.0,
-        elapsed_time=0.2 + RUNNING_CREW_TILE_DURATION / 2,
+        elapsed_time=0.2 + STUDENT_CROWD_TILE_DURATION / 2,
     )
 
-    game.current_scene._draw_running_crews(
+    game.current_scene._draw_student_crowds(
         surface,
-        [crew],
+        [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,
@@ -925,23 +944,23 @@ def test_running_crew_active_moves_runners_right_and_refills_from_left() -> None
     assert surface.get_at((285, 50))[:3] == (67, 107, 218)
 
 
-def test_running_crew_tail_exits_without_refilling_after_active_duration() -> None:
+def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> None:
     pygame.font.init()
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
-    register_running_crew_test_images(game)
-    crew = RunningCrew(
+    register_student_crowd_test_images(game)
+    crowd = StudentCrowd(
         row=0,
         columns=3,
         warning_time=0.2,
         active_duration=1.0,
-        elapsed_time=0.2 + 1.0 + RUNNING_CREW_TILE_DURATION * 2.5,
+        elapsed_time=0.2 + 1.0 + STUDENT_CROWD_TILE_DURATION * 2.5,
     )
 
-    game.current_scene._draw_running_crews(
+    game.current_scene._draw_student_crowds(
         surface,
-        [crew],
+        [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         pygame.Rect(0, 0, 300, 100),
         100,

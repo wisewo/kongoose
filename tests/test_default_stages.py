@@ -2,7 +2,7 @@ import wave
 from pathlib import Path
 
 from kongoose.game import Game
-from kongoose.models import UPDATE_BIKE_AMBIENCE, TerrainType
+from kongoose.models import TerrainType
 from kongoose.scenes import PlayingScene
 from kongoose.stage import Stage
 
@@ -73,19 +73,23 @@ def test_default_stages_match_documented_object_counts() -> None:
     game = Game()
 
     assert len(game.stages[1].bikes) == 0
-    assert len(game.stages[1].running_crews) == 0
+    assert len(game.stages[1].bike_lanes) == 0
+    assert len(game.stages[1].student_crowds) == 0
     assert len(game.stages[1].turtles) == 0
 
-    assert len(game.stages[2].bikes) == 8
-    assert len(game.stages[2].running_crews) == 0
+    assert len(game.stages[2].bike_lanes) == 8
+    assert len(game.stages[2].bikes) == 16
+    assert len(game.stages[2].student_crowds) == 0
     assert len(game.stages[2].turtles) == 0
 
     assert len(game.stages[3].bikes) == 0
-    assert len(game.stages[3].running_crews) == 0
+    assert len(game.stages[3].bike_lanes) == 0
+    assert len(game.stages[3].student_crowds) == 0
     assert len(game.stages[3].turtles) == 3
 
-    assert len(game.stages[4].bikes) == 8
-    assert len(game.stages[4].running_crews) == 1
+    assert len(game.stages[4].bike_lanes) == 8
+    assert len(game.stages[4].bikes) == 16
+    assert len(game.stages[4].student_crowds) == 1
     assert len(game.stages[4].turtles) == 3
 
 
@@ -117,7 +121,7 @@ def test_default_stages_have_required_static_terrain() -> None:
         assert terrains.count(_river_type()) == expected_rivers[stage_id]
 
 
-def test_default_stage_bikes_are_fast_and_avoid_wall_rows() -> None:
+def test_default_stage_bike_lanes_are_moderate_speed_and_avoid_wall_rows() -> None:
     game = Game()
 
     expected_minimum_bike_rows = {
@@ -127,46 +131,49 @@ def test_default_stage_bikes_are_fast_and_avoid_wall_rows() -> None:
 
     for stage_id, minimum_rows in expected_minimum_bike_rows.items():
         stage = game.stages[stage_id]
-        bike_rows = {bike.position.row for bike in stage.bikes}
+        bike_rows = {lane.row for lane in stage.bike_lanes}
 
         assert len(bike_rows) >= minimum_rows
-        for bike in stage.bikes:
+        for lane in stage.bike_lanes:
             row_tiles = [
-                stage.terrain_map.get_terrain(_position(bike.position.row, column))
+                stage.terrain_map.get_terrain(_position(lane.row, column))
                 for column in range(stage.terrain_map.columns)
             ]
-            traversal_time = stage.terrain_map.columns / bike.speed
+            traversal_time = stage.terrain_map.columns / lane.speed
 
             assert TerrainType.WALL not in row_tiles
-            assert traversal_time <= 0.85
+            assert 1.2 <= traversal_time <= 1.8
 
 
-def test_default_stage_bike_rows_are_candidates_not_always_active() -> None:
+def test_default_stage_bike_lanes_use_independent_offsets() -> None:
     game = Game()
 
     for stage_id in (2, 4):
         stage = game.stages[stage_id]
-        candidate_rows = {bike.position.row for bike in stage.bikes}
+        lane_offsets = {lane.initial_offset for lane in stage.bike_lanes}
 
         stage.initialize()
 
-        assert len(candidate_rows) == 8
+        assert len(lane_offsets) > 1
         assert not any(bike.is_active for bike in stage.bikes)
-        assert stage.update(0.7) != UPDATE_BIKE_AMBIENCE
-        assert sum(1 for bike in stage.bikes if bike.is_active) <= 2
+        stage.update(0.2)
+        assert any(bike.is_active for bike in stage.bikes)
+        assert sum(1 for bike in stage.bikes if bike.is_active) < len(stage.bikes)
 
 
-def test_default_stage_bike_waves_spawn_multiple_rows() -> None:
+def test_default_stage_bike_lanes_allow_multiple_bikes_per_row() -> None:
     game = Game()
 
     for stage_id in (2, 4):
         stage = game.stages[stage_id]
         stage.initialize()
 
-        assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-        assert len(stage.peek_warning_bike_rows()) == 2
-        assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-        assert sum(1 for bike in stage.bikes if bike.is_active) == 2
+        assert all(lane.max_active >= 2 for lane in stage.bike_lanes)
+        stage.update(0.1)
+        stage.update(1.3)
+
+        active_rows = [bike.position.row for bike in stage.bikes if bike.is_active]
+        assert any(active_rows.count(row) >= 2 for row in set(active_rows))
 
 
 def test_default_stage_rivers_cross_map_and_are_not_adjacent() -> None:
@@ -202,12 +209,12 @@ def test_default_stage_turtles_are_faster_and_stay_on_river_rows() -> None:
             assert stage.terrain_map.get_terrain(turtle.position) == river
 
 
-def test_default_running_crew_timing_matches_sound_lengths() -> None:
+def test_default_student_crowd_timing_matches_sound_length() -> None:
     game = Game()
-    crew = game.stages[4].running_crews[0]
+    crowd = game.stages[4].student_crowds[0]
 
-    assert crew.warning_time == _sound_duration("running_crew_warning.wav")
-    assert crew.active_duration == _sound_duration("running_crew_active.wav")
+    assert crowd.warning_time == 1.0
+    assert crowd.active_duration == _sound_duration("student_crowd.wav") - 1.0
 
 
 def _all_positions(terrain_map):

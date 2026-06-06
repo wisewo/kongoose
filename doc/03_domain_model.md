@@ -55,7 +55,7 @@ classDiagram
         direction
     }
 
-    class RunningCrew {
+    class StudentCrowd {
         speed
         direction
         warning_time
@@ -89,7 +89,7 @@ classDiagram
     Stage "1" --> "1" TerrainMap
     Stage "1" --> "1" Player
     Stage "1" --> "0..*" Bike
-    Stage "1" --> "0..*" RunningCrew
+    Stage "1" --> "0..*" StudentCrowd
     Stage "1" --> "0..*" Turtle
     Stage "1" --> "0..1" StarRating
 
@@ -98,7 +98,7 @@ classDiagram
 
     Player "1" --> "1" Position : occupies
     Bike "1" --> "1" Position : occupies
-    RunningCrew "1" --> "1..*" Position : occupies
+    StudentCrowd "1" --> "1..*" Position : occupies
     Turtle "1" --> "1..*" Position : occupies
 
     Player "0..1" --> "0..1" Turtle : rides
@@ -118,7 +118,7 @@ classDiagram
 | Position | 맵 위의 row, column 위치 |
 | Player | 플레이어가 조작하는 건구스 |
 | Bike | 육지 구간의 일반 이동 장애물 |
-| RunningCrew | 육지 구간의 한 줄 전체를 채우는 특수 장애물 |
+| StudentCrowd | 육지 구간의 한 줄 전체를 채우는 특수 장애물 |
 | Turtle | 강 구간의 이동 발판 |
 | Timer | 스테이지별 경과 시간을 측정하는 개념 |
 | StarRating | 클리어 시간에 따라 부여되는 스테이지별 별점 |
