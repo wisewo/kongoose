@@ -344,8 +344,11 @@ class PlayingScene(EmptyScene):
         width, height = surface.get_size()
         title_font, body_font = _fonts(44, 26)
         grid_rect, cell_size = self._calculate_grid_layout(
-            width, max(1, height - PLAYING_HUD_HEIGHT), terrain_map.rows,
-            terrain_map.columns, player.position
+            width,
+            max(1, height - PLAYING_HUD_HEIGHT),
+            terrain_map.rows,
+            terrain_map.columns,
+            player.position,
         )
         grid_rect.move_ip(0, PLAYING_HUD_HEIGHT)
         self._draw_terrain_grid(surface, terrain_map, grid_rect, cell_size, stage_id)

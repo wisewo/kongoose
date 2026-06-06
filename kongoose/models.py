@@ -27,12 +27,8 @@ class SoundCue:
     BACKGROUND_MUSIC = "background_music"
 
 
-MOVE_BLOCKED, MOVE_MOVED, MOVE_CLEARED, MOVE_FAILED = (
-    "blocked",
-    "moved",
-    "cleared",
-    "failed",
-)
+MOVE_BLOCKED, MOVE_MOVED = "blocked", "moved"
+MOVE_CLEARED, MOVE_FAILED = "cleared", "failed"
 
 UPDATE_SAFE, UPDATE_WARNING = "safe", "warning"
 UPDATE_RUNNING_CREW_ACTIVE = "running_crew_active"
