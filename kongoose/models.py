@@ -1,61 +1,65 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
-from enum import Enum, auto
+from enum import Enum
 
 
-class Direction(Enum):
-    UP = auto()
-    DOWN = auto()
-    LEFT = auto()
-    RIGHT = auto()
+class Direction:
+    UP = "up"
+    DOWN = "down"
+    LEFT = "left"
+    RIGHT = "right"
 
 
-class TerrainType(Enum):
-    LAND = auto()
-    LAKE = auto()
-    SAFE = auto()
-    WALL = auto()
-    START = auto()
-    GOAL = auto()
-
-
-class MoveResultType(Enum):
-    BLOCKED = auto()
-    MOVED = auto()
-    CLEARED = auto()
-    FAILED = auto()
-
-
-class StageUpdateResultType(Enum):
-    SAFE = auto()
-    WARNING = auto()
-    TURTLE_RIDE = auto()
-    BIKE_AMBIENCE = auto()
-    FAILURE = auto()
+class TerrainType:
+    LAND = "."
+    RIVER = "~"
+    SAFE = "-"
+    WALL = "#"
+    START = "S"
+    GOAL = "G"
 
 
 class FailureReason(Enum):
-    HIT_BIKE = auto()
-    HIT_RUNNING_CREW = auto()
-    FELL_IN_LAKE = auto()
-    CARRIED_OFF_SCREEN = auto()
+    HIT_BIKE = "hit_bike"
+    HIT_RUNNING_CREW = "hit_running_crew"
+    FELL_IN_RIVER = "fell_in_river"
+    CARRIED_OFF_SCREEN = "carried_off_screen"
 
 
-class SoundCue(Enum):
-    MOVE = auto()
-    TURTLE = auto()
-    BIKE_AMBIENCE = auto()
-    RUNNING_CREW_WARNING = auto()
-    FAILURE = auto()
+class SoundCue:
+    MOVE_START = "move_start"
+    MOVE_SUCCESS = "move_success"
+    MOVE = "move"
+    BLOCKED = "blocked"
+    TURTLE = "turtle"
+    BIKE_AMBIENCE = "bike_ambience"
+    RUNNING_CREW_WARNING = "running_crew_warning"
+    RUNNING_CREW_ACTIVE = "running_crew_active"
+    LAKE_SPLASH = "lake_splash"
+    FAILURE_SCREEN = "failure_screen"
+    CLEAR_SCREEN = "clear_screen"
+    UI_SELECT = "ui_select"
+    BACKGROUND_MUSIC = "background_music"
 
 
-@dataclass(frozen=True, slots=True)
+MOVE_BLOCKED = "blocked"
+MOVE_MOVED = "moved"
+MOVE_CLEARED = "cleared"
+MOVE_FAILED = "failed"
+
+UPDATE_SAFE = "safe"
+UPDATE_WARNING = "warning"
+UPDATE_RUNNING_CREW_ACTIVE = "running_crew_active"
+UPDATE_TURTLE_RIDE = "turtle_ride"
+UPDATE_BIKE_AMBIENCE = "bike_ambience"
+UPDATE_FAILED = "failed"
+
+
+@dataclass
 class Position:
     row: int
     column: int
 
-    def moved(self, direction: Direction) -> Position:
+    def moved(self, direction: str) -> "Position":
         offsets = {
             Direction.UP: (-1, 0),
             Direction.DOWN: (1, 0),
@@ -63,7 +67,4 @@ class Position:
             Direction.RIGHT: (0, 1),
         }
         row_offset, column_offset = offsets[direction]
-        return Position(
-            row=self.row + row_offset,
-            column=self.column + column_offset,
-        )
+        return Position(self.row + row_offset, self.column + column_offset)

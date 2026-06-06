@@ -1,177 +1,141 @@
-from __future__ import annotations
+import csv
+from pathlib import Path
 
-from collections.abc import Sequence
-
-from kongoose.models import Direction, Position, TerrainType
+from kongoose.models import Position, TerrainType
 from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
 from kongoose.terrain import TerrainMap
 
-TILE_TYPES = {
-    ".": TerrainType.LAND,
-    "~": TerrainType.LAKE,
-    "-": TerrainType.SAFE,
-    "#": TerrainType.WALL,
-    "S": TerrainType.START,
-    "G": TerrainType.GOAL,
+STAGE_IDS = (1, 2, 3, 4)
+STAGE_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "stages"
+VALID_TILES = {
+    TerrainType.LAND,
+    TerrainType.RIVER,
+    TerrainType.SAFE,
+    TerrainType.WALL,
+    TerrainType.START,
+    TerrainType.GOAL,
 }
 
 
 def build_default_stages() -> dict[int, Stage]:
+    actors = _load_actors(STAGE_DATA_DIR / "actors.csv")
     return {
-        1: _build_stage_one(),
-        2: _build_stage_two(),
-        3: _build_stage_three(),
-        4: _build_stage_four(),
+        stage_id: _build_stage(
+            _load_layout(STAGE_DATA_DIR / f"stage_{stage_id}_map.txt"),
+            **actors.get(stage_id, _new_actor_lists()),
+        )
+        for stage_id in STAGE_IDS
     }
 
 
-def _build_stage_one() -> Stage:
-    return _build_stage(
-        [
-            "......G",
-            ".#.#...",
-            "....#..",
-            "..#....",
-            ".......",
-            ".#.....",
-            "S......",
-        ]
+def _load_layout(path: Path) -> list[str]:
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _load_actors(path: Path) -> dict[int, dict[str, list]]:
+    actors: dict[int, dict[str, list]] = {}
+    factories = {
+        "bike": ("bikes", _make_bike),
+        "running_crew": ("running_crews", _make_running_crew),
+        "turtle": ("turtles", _make_turtle),
+    }
+
+    with path.open(newline="", encoding="utf-8") as file:
+        for row in csv.DictReader(file):
+            stage_id = _int(row, "stage")
+            stage_actors = actors.setdefault(stage_id, _new_actor_lists())
+            actor_type = _text(row, "type")
+            if actor_type not in factories:
+                raise ValueError(f"unknown actor type: {actor_type}")
+            actor_list, make_actor = factories[actor_type]
+            stage_actors[actor_list].append(make_actor(row))
+
+    return actors
+
+
+def _new_actor_lists() -> dict[str, list]:
+    return {"bikes": [], "running_crews": [], "turtles": []}
+
+
+def _make_bike(row: dict) -> Bike:
+    return Bike(
+        position=Position(row=_int(row, "row"), column=_int(row, "column")),
+        direction=_text(row, "direction"),
+        speed=_float(row, "speed"),
     )
 
 
-def _build_stage_two() -> Stage:
-    return _build_stage(
-        [
-            ".......G",
-            "..#..#..",
-            "........",
-            ".#....#.",
-            "....#...",
-            "..#.....",
-            "S.......",
-        ],
-        bikes=[
-            Bike(
-                position=Position(row=3, column=0),
-                direction=Direction.RIGHT,
-                speed=1.0,
-            ),
-            Bike(
-                position=Position(row=2, column=7),
-                direction=Direction.LEFT,
-                speed=1.2,
-            ),
-        ],
+def _make_running_crew(row: dict) -> RunningCrew:
+    return RunningCrew(
+        row=_int(row, "row"),
+        columns=_int(row, "columns"),
+        warning_time=_float(row, "warning_time"),
+        active_duration=_float(row, "active_duration"),
     )
 
 
-def _build_stage_three() -> Stage:
-    return _build_stage(
-        [
-            "........G",
-            "..#..#...",
-            ".........",
-            "...~~~...",
-            "..~~~~~..",
-            ".........",
-            "S........",
-        ],
-        turtles=[
-            Turtle(
-                position=Position(row=3, column=3),
-                direction=Direction.RIGHT,
-                speed=0.5,
-                length=2,
-            ),
-            Turtle(
-                position=Position(row=4, column=2),
-                direction=Direction.RIGHT,
-                speed=0.4,
-                length=3,
-            ),
-        ],
-    )
-
-
-def _build_stage_four() -> Stage:
-    return _build_stage(
-        [
-            ".........G",
-            "..#..#..#.",
-            "....#.....",
-            "...~~~~...",
-            "..~~~~~~..",
-            ".#....#...",
-            "..#...#...",
-            "S.........",
-        ],
-        bikes=[
-            Bike(
-                position=Position(row=5, column=0),
-                direction=Direction.RIGHT,
-                speed=1.2,
-            ),
-            Bike(
-                position=Position(row=2, column=9),
-                direction=Direction.LEFT,
-                speed=1.5,
-            ),
-        ],
-        running_crews=[
-            RunningCrew(
-                row=6,
-                columns=10,
-                warning_time=1.0,
-                active_duration=1.0,
-            )
-        ],
-        turtles=[
-            Turtle(
-                position=Position(row=3, column=3),
-                direction=Direction.RIGHT,
-                speed=0.6,
-                length=2,
-            ),
-            Turtle(
-                position=Position(row=4, column=2),
-                direction=Direction.RIGHT,
-                speed=0.5,
-                length=3,
-            ),
-        ],
+def _make_turtle(row: dict) -> Turtle:
+    return Turtle(
+        position=Position(row=_int(row, "row"), column=_int(row, "column")),
+        direction=_text(row, "direction"),
+        speed=_float(row, "speed"),
     )
 
 
 def _build_stage(
-    layout: Sequence[str],
-    bikes: Sequence[Bike] = (),
-    running_crews: Sequence[RunningCrew] = (),
-    turtles: Sequence[Turtle] = (),
+    layout: list[str],
+    bikes: list[Bike],
+    running_crews: list[RunningCrew],
+    turtles: list[Turtle],
 ) -> Stage:
     terrain_rows, start_position = _parse_layout(layout)
     return Stage(
         terrain_map=TerrainMap(terrain_rows),
         player=Player(position=start_position),
-        bikes=list(bikes),
-        running_crews=list(running_crews),
-        turtles=list(turtles),
+        bikes=bikes,
+        running_crews=running_crews,
+        turtles=turtles,
+        bike_waves_enabled=bool(bikes),
+        bike_wave_interval=2.0,
+        bike_wave_warning_lookahead=1.0,
+        bike_wave_batch_size=2,
     )
 
 
-def _parse_layout(layout: Sequence[str]) -> tuple[list[list[TerrainType]], Position]:
-    terrain_rows: list[list[TerrainType]] = []
-    start_positions: list[Position] = []
+def _parse_layout(layout: list[str]) -> tuple[list[list[str]], Position]:
+    invalid_tile = next(
+        (tile for row in layout for tile in row if tile not in VALID_TILES),
+        None,
+    )
+    if invalid_tile is not None:
+        raise ValueError(f"unknown tile type: {invalid_tile}")
 
-    for row_index, row in enumerate(layout):
-        terrain_row: list[TerrainType] = []
-        for column_index, tile in enumerate(row):
-            terrain_type = TILE_TYPES[tile]
-            if terrain_type is TerrainType.START:
-                start_positions.append(Position(row=row_index, column=column_index))
-            terrain_row.append(terrain_type)
-        terrain_rows.append(terrain_row)
+    terrain_rows = [list(row) for row in layout]
+    start_positions = [
+        Position(row=row_index, column=column_index)
+        for row_index, row in enumerate(layout)
+        for column_index, tile in enumerate(row)
+        if tile == TerrainType.START
+    ]
 
     if len(start_positions) != 1:
         raise ValueError("stage layout must contain exactly one START tile")
 
     return terrain_rows, start_positions[0]
+
+
+def _text(row: dict, name: str) -> str:
+    value = row.get(name, "")
+    return "" if value is None else value.strip()
+
+
+def _int(row: dict, name: str) -> int:
+    return int(_text(row, name))
+
+
+def _float(row: dict, name: str) -> float:
+    return float(_text(row, name))

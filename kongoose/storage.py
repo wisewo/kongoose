@@ -1,29 +1,29 @@
-from __future__ import annotations
-
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
-@dataclass(slots=True)
+@dataclass
 class Progress:
     total_stages: int = 4
-    unlocked_stages: set[int] = field(default_factory=lambda: {1})
-    best_stars: dict[int, int] = field(default_factory=dict)
+    unlocked_stages: set[int] | None = None
+    best_stars: dict[int, int] | None = None
 
     def __post_init__(self) -> None:
         if self.total_stages < 1:
             raise ValueError("total_stages must be at least 1")
+
+        unlocked_stages = {1} if self.unlocked_stages is None else self.unlocked_stages
         self.unlocked_stages = {
             stage_id
-            for stage_id in self.unlocked_stages
+            for stage_id in unlocked_stages
             if 1 <= stage_id <= self.total_stages
-        }
-        self.unlocked_stages.add(1)
+        } | {1}
+
+        best_stars = {} if self.best_stars is None else self.best_stars
         self.best_stars = {
             stage_id: stars
-            for stage_id, stars in self.best_stars.items()
+            for stage_id, stars in best_stars.items()
             if 1 <= stage_id <= self.total_stages and 0 <= stars <= 3
         }
 
@@ -47,18 +47,18 @@ class Progress:
         if next_stage_id <= self.total_stages:
             self.unlocked_stages.add(next_stage_id)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
+        best_stars = {
+            str(stage_id): stars for stage_id, stars in sorted(self.best_stars.items())
+        }
         return {
             "total_stages": self.total_stages,
             "unlocked_stages": self.get_unlocked_stages(),
-            "best_stars": {
-                str(stage_id): stars
-                for stage_id, stars in sorted(self.best_stars.items())
-            },
+            "best_stars": best_stars,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Progress:
+    def from_dict(cls, data: dict) -> "Progress":
         return cls(
             total_stages=int(data.get("total_stages", 4)),
             unlocked_stages={
@@ -90,7 +90,10 @@ class SaveManager:
 
         if not isinstance(data, dict):
             return Progress()
-        return Progress.from_dict(data)
+        try:
+            return Progress.from_dict(data)
+        except (AttributeError, TypeError, ValueError):
+            return Progress()
 
     def save_progress(self, progress: Progress) -> None:
         self.save_path.parent.mkdir(parents=True, exist_ok=True)

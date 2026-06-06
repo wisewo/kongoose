@@ -172,13 +172,17 @@ sequenceDiagram
             PlayingScene->>SaveManager: save_progress(progress)
             PlayingScene->>Game: change_scene(ResultScene)
             Game->>ResultScene: enter(game)
+            PlayingScene->>SoundManager: play(SoundCue.CLEAR_SCREEN)
             ResultScene->>ResultScene: draw(surface)
             ResultScene-->>User: 스테이지 클리어 화면과 별점 표시
         else 실패 조건 발생
             Stage-->>PlayingScene: MoveResult(failed, failure_reason)
-            PlayingScene->>SoundManager: play(SoundCue.FAILURE)
+            opt 강/호수 추락
+                PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
+            end
             PlayingScene->>Game: change_scene(FailedScene)
             Game->>FailedScene: enter(game)
+            PlayingScene->>SoundManager: play(SoundCue.FAILURE_SCREEN)
             FailedScene->>FailedScene: draw(surface)
             FailedScene-->>User: 실패 화면 표시
         else 자라 탑승
@@ -188,8 +192,9 @@ sequenceDiagram
             PlayingScene-->>User: 변경된 게임 화면과 상태 정보 표시
         else 일반 이동
             Stage-->>PlayingScene: MoveResult(moved)
-            PlayingScene->>SoundManager: play(SoundCue.MOVE)
+            PlayingScene->>SoundManager: play(SoundCue.MOVE_START)
             Note over PlayingScene,Stage: 이동 직후 판정은 완료되며, 게임 루프 갱신에서도 같은 판정 규칙을 재사용
+            PlayingScene->>SoundManager: play(SoundCue.MOVE_SUCCESS)
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 변경된 게임 화면과 상태 정보 표시
         end
@@ -205,23 +210,30 @@ sequenceDiagram
         Stage-->>PlayingScene: StageUpdateResult(result_type)
 
         alt 실패 조건 발생
-            PlayingScene->>SoundManager: play(SoundCue.FAILURE)
+            opt 강/호수 추락
+                PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
+            end
             PlayingScene->>Game: change_scene(FailedScene)
             Game->>FailedScene: enter(game)
+            PlayingScene->>SoundManager: play(SoundCue.FAILURE_SCREEN)
             FailedScene->>FailedScene: draw(surface)
             FailedScene-->>User: 실패 화면 표시
         else 러닝크루 경고 발생
             PlayingScene->>SoundManager: play(SoundCue.RUNNING_CREW_WARNING)
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 경고와 게임 화면 표시
+        else 러닝크루 실제 등장
+            PlayingScene->>SoundManager: play(SoundCue.RUNNING_CREW_ACTIVE)
+            PlayingScene->>PlayingScene: draw(surface)
+            PlayingScene-->>User: 러닝크루 등장 상태와 게임 화면 표시
         else 자라 탑승
             PlayingScene->>SoundManager: play(SoundCue.TURTLE)
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
-        else 자전거 환경음 필요
+        else 자전거 웨이브 등장
             PlayingScene->>SoundManager: play(SoundCue.BIKE_AMBIENCE)
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
+            PlayingScene-->>User: 등장한 자전거와 게임 화면 표시
         else 안전 상태
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시

@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 from collections.abc import Sequence
 
 from kongoose.models import Position, TerrainType
 
 
 class TerrainMap:
-    def __init__(self, terrain_rows: Sequence[Sequence[TerrainType]]) -> None:
+    def __init__(self, terrain_rows: Sequence[Sequence[str]]) -> None:
         if not terrain_rows:
             raise ValueError("terrain map must have at least one row")
 
@@ -21,7 +19,7 @@ class TerrainMap:
         self.rows = len(self._map)
         self.columns = column_count
 
-    def get_terrain(self, position: Position) -> TerrainType:
+    def get_terrain(self, position: Position) -> str:
         if not self._is_in_bounds(position):
             raise IndexError("position is outside the terrain map")
         return self._map[position.row][position.column]
@@ -29,7 +27,7 @@ class TerrainMap:
     def can_enter(self, position: Position) -> bool:
         if not self._is_in_bounds(position):
             return False
-        return self.get_terrain(position) is not TerrainType.WALL
+        return self.get_terrain(position) != TerrainType.WALL
 
     def _is_in_bounds(self, position: Position) -> bool:
         return 0 <= position.row < self.rows and 0 <= position.column < self.columns

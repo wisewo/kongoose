@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import time
 from collections.abc import Callable
 
@@ -31,10 +29,10 @@ class Timer:
 
 class StarRating:
     _THRESHOLDS = {
-        1: (20.0, 30.0, 45.0),
-        2: (25.0, 38.0, 55.0),
-        3: (30.0, 45.0, 65.0),
-        4: (35.0, 52.0, 75.0),
+        1: (45.0, 68.0, 100.0),
+        2: (55.0, 83.0, 120.0),
+        3: (65.0, 98.0, 145.0),
+        4: (80.0, 120.0, 175.0),
     }
 
     @classmethod

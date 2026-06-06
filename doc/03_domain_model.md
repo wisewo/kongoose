@@ -65,7 +65,6 @@ classDiagram
     class Turtle {
         speed
         direction
-        length
     }
 
     class Timer {
