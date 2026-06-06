@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from pathlib import Path
 
 import pygame
@@ -8,7 +7,7 @@ from kongoose.models import MOVE_BLOCKED, Direction, Position, SoundCue, Terrain
 MAX_STAGE_COUNT = 4
 HOP_DURATION = 0.18
 HOP_SIZE_BONUS = 0.90
-PLAYER_CELL_INSET = 0.50
+PLAYER_CELL_INSET = 0.25
 MIN_TILE_SIZE = 24
 TEXT_COLOR = (35, 45, 50)
 MESSAGE_COLOR = (172, 72, 39)
@@ -61,30 +60,11 @@ def _fonts(*sizes: int):
     return tuple(pygame.font.Font(None, size) for size in sizes)
 
 
-def grid_top_for_focus(rows, cell_size, surface_height, focus_row):
-    grid_height = cell_size * rows
-    if rows <= 0 or grid_height <= surface_height:
-        return 0
-    focus_center_y = focus_row * cell_size + cell_size / 2
-    desired_top = surface_height / 2 - focus_center_y
-    return min(max(desired_top, surface_height - grid_height), 0)
-
-
 def _blit_scaled_centered(surface, image, target_rect) -> None:
     scaled_rect = image.get_rect().fit(target_rect)
     size = max(1, scaled_rect.width), max(1, scaled_rect.height)
     scaled = pygame.transform.smoothscale(image, size)
     surface.blit(scaled, scaled_rect)
-
-
-@contextmanager
-def _clipped(surface, rect):
-    previous_clip = surface.get_clip()
-    surface.set_clip(rect)
-    try:
-        yield
-    finally:
-        surface.set_clip(previous_clip)
 
 
 def _trim_transparent_margins(image):
@@ -337,19 +317,23 @@ class PlayingScene(EmptyScene):
         self._draw_terrain_grid(surface, terrain_map, grid_rect, cell_size, stage_id)
         crowds = getattr(stage, "student_crowds", [])
         self._draw_student_crowds(surface, crowds, terrain_map, grid_rect, cell_size)
-        for sprites, color, get_image, width_bonus in (
-            (getattr(stage, "turtles", []), TURTLE_COLOR, self._get_turtle_image, 0.32),
-            (getattr(stage, "bikes", []), BIKE_COLOR, self._get_bike_image, 0.4),
+        columns = terrain_map.columns
+        for sprites, style in (
+            (
+                getattr(stage, "turtles", []),
+                (TURTLE_COLOR, self._get_turtle_image, 0.32),
+            ),
+            (getattr(stage, "bikes", []), (BIKE_COLOR, self._get_bike_image, 0.4)),
         ):
             self._draw_position_sprites(
-                surface, sprites, grid_rect, cell_size, color, get_image, width_bonus
+                surface, sprites, grid_rect, cell_size, style, columns
             )
         self._draw_player(surface, player, grid_rect, cell_size)
         self._draw_playing_hud(surface, title_font, body_font, stage_text, elapsed_text)
 
     def _draw_playing_hud(
         self, surface, title_font, body_font, stage_text, elapsed_text
-    ) -> None:
+    ):
         hud_rect = pygame.Rect(0, 0, surface.get_width(), PLAYING_HUD_HEIGHT)
         pygame.draw.rect(surface, HUD_OVERLAY_COLOR, hud_rect)
         pygame.draw.line(
@@ -364,15 +348,21 @@ class PlayingScene(EmptyScene):
             surface.blit(body_font.render(text, True, TEXT_COLOR), position)
 
     def _calculate_grid_layout(self, width, height, rows, columns, focus=None):
+        columns = max(1, columns)
         cell_size = max(MIN_TILE_SIZE, width / columns)
-        grid_width = max(width, round(cell_size * columns))
-        grid_height = round(cell_size * rows)
-        top = (
-            0
-            if focus is None
-            else round(grid_top_for_focus(rows, cell_size, height, focus.row))
-        )
-        return pygame.Rect(0, top, grid_width, grid_height), cell_size
+        grid_width = round((rows + columns) * cell_size / 2)
+        grid_height = round((rows + columns) * cell_size / 4)
+        origin_x = round((width - grid_width) / 2 + rows * cell_size / 2)
+        top = min(0, round((height - grid_height) / 2))
+        if focus is not None:
+            origin_x = round(width / 2 - (focus.column - focus.row) * cell_size / 2)
+            top = round(height / 2 - (focus.column + focus.row + 1) * cell_size / 4)
+        if grid_width > width:
+            min_origin = width - columns * cell_size / 2
+            origin_x = round(min(max(origin_x, min_origin), rows * cell_size / 2))
+        if grid_height > height:
+            top = round(min(max(top, height - grid_height), 0))
+        return pygame.Rect(origin_x, top, grid_width, grid_height), cell_size
 
     def _draw_terrain_grid(
         self, surface, terrain_map, grid_rect, cell_size, stage_id=None
@@ -383,10 +373,11 @@ class PlayingScene(EmptyScene):
                 terrain = terrain_map.get_terrain(position)
                 color = TERRAIN_STYLES[terrain]
                 rect = self._cell_rect(grid_rect, cell_size, position)
-                pygame.draw.rect(surface, color, rect)
-                if terrain == TerrainType.GOAL and (
-                    goal_image := self._get_goal_image(stage_id)
-                ):
+                pygame.draw.polygon(
+                    surface, color, self._tile_points(grid_rect, cell_size, position)
+                )
+                is_goal = terrain == TerrainType.GOAL
+                if is_goal and (goal_image := self._get_goal_image(stage_id)):
                     _blit_scaled_centered(surface, goal_image, rect)
 
     def _draw_student_crowds(self, surface, crowds, terrain, grid, cell_size):
@@ -421,8 +412,7 @@ class PlayingScene(EmptyScene):
             grid, cell_size, Position(crowd.row, terrain.columns - 1)
         )
         target_rect = first.union(last).inflate(0, round(cell_size * 0.2))
-        with _clipped(surface, grid):
-            _blit_scaled_centered(surface, crowd_image, target_rect)
+        _blit_scaled_centered(surface, crowd_image, target_rect)
         return True
 
     def _draw_student_crowd_runners(self, surface, crowd, terrain, grid, cell_size):
@@ -450,45 +440,45 @@ class PlayingScene(EmptyScene):
             runner_images.append((column, _trim_transparent_margins(runner_image)))
         if not runner_images:
             return False
-        with _clipped(surface, grid):
-            for column, runner_image in runner_images:
-                cell = self._cell_rect(grid, cell_size, Position(crowd.row, column))
-                rect = cell.move(round(progress * cell_size), 0)
-                target_rect = rect.inflate(
-                    -round(cell_size * 0.08), -round(cell_size * 0.04)
-                )
-                _blit_scaled_centered(surface, runner_image, target_rect)
+        for column, runner_image in runner_images:
+            cell = self._cell_rect(grid, cell_size, Position(crowd.row, column))
+            rect = self._move_rect_by_grid_progress(
+                cell, Direction.RIGHT, progress, cell_size
+            )
+            target_rect = rect.inflate(
+                -round(cell_size * 0.08), -round(cell_size * 0.04)
+            )
+            _blit_scaled_centered(surface, runner_image, target_rect)
         return True
 
-    def _draw_position_sprites(
-        self, surface, sprites, grid, cell_size, color, get_image=None, width_bonus=0
-    ):
-        with _clipped(surface, grid):
-            for sprite in sprites:
-                for rect in self._get_sprite_draw_rects(sprite, grid, cell_size):
-                    if (
-                        get_image is not None
-                        and (image := get_image(sprite)) is not None
-                    ):
-                        asset_rect = rect.inflate(round(cell_size * width_bonus), 0)
-                        _blit_scaled_centered(surface, image, asset_rect)
-                        continue
-                    rect = rect.inflate(-cell_size * 0.24, -cell_size * 0.24)
-                    pygame.draw.ellipse(surface, color, rect)
+    def _draw_position_sprites(self, surface, sprites, grid, cell_size, style, columns):
+        color, get_image, width_bonus = style
+        for sprite in sprites:
+            for rect in self._get_sprite_draw_rects(sprite, grid, cell_size, columns):
+                if get_image is not None and (image := get_image(sprite)) is not None:
+                    asset_rect = rect.inflate(round(cell_size * width_bonus), 0)
+                    _blit_scaled_centered(surface, image, asset_rect)
+                    continue
+                pygame.draw.ellipse(
+                    surface,
+                    color,
+                    rect.inflate(-cell_size * 0.24, -cell_size * 0.24),
+                )
 
     def _draw_player(self, surface, player, grid_rect, cell_size: int) -> None:
         rect = self._get_player_draw_rect(
             grid_rect, cell_size, player.position, player.mounted_turtle
         )
         if image := self._get_player_image(player.facing_direction):
-            _blit_scaled_centered(surface, image, rect)
+            _blit_scaled_centered(surface, _trim_transparent_margins(image), rect)
             return
         pygame.draw.rect(surface, PLAYER_COLOR, rect, border_radius=8)
 
     def _get_player_draw_rect(self, grid, cell_size, position, carried=None):
-        base_rect = self._cell_rect(grid, cell_size, position).inflate(
-            -cell_size * PLAYER_CELL_INSET,
-            -cell_size * PLAYER_CELL_INSET,
+        cell_rect = self._cell_rect(grid, cell_size, position)
+        base_rect = cell_rect.inflate(
+            -round(cell_rect.width * PLAYER_CELL_INSET),
+            -round(cell_rect.height * PLAYER_CELL_INSET),
         )
         if carried is not None:
             return self._move_rect_by_sprite_progress(base_rect, carried, cell_size)
@@ -508,36 +498,45 @@ class PlayingScene(EmptyScene):
         draw_rect.center = (round(center[0]), round(center[1]))
         return draw_rect
 
-    def _get_sprite_draw_rects(self, sprite, grid_rect, cell_size: int):
+    def _get_sprite_draw_rects(self, sprite, grid_rect, cell_size: int, columns=None):
         return [
             self._move_rect_by_sprite_progress(
-                self._cell_rect(grid_rect, cell_size, position), sprite, cell_size
+                self._cell_rect(grid_rect, cell_size, position),
+                sprite,
+                cell_size,
+                columns,
             )
             for position in sprite.get_positions()
         ]
 
-    def _move_rect_by_sprite_progress(self, rect, sprite, cell_size: int):
+    def _move_rect_by_sprite_progress(self, rect, sprite, cell_size: int, columns=None):
+        direction = getattr(sprite, "direction", "")
         progress = getattr(sprite, "distance_progress", 0.0)
-        x_offset, y_offset = SPRITE_PROGRESS_OFFSETS.get(
-            getattr(sprite, "direction", ""), (0.0, 0.0)
-        )
+        if columns is not None and direction in SPRITE_PROGRESS_OFFSETS:
+            if not 0 <= sprite.position.moved(direction).column < columns:
+                progress = 0.0
+        return self._move_rect_by_grid_progress(rect, direction, progress, cell_size)
+
+    def _move_rect_by_grid_progress(self, rect, direction, progress, cell_size):
+        column_offset, row_offset = SPRITE_PROGRESS_OFFSETS.get(direction, (0.0, 0.0))
         return rect.move(
-            round(x_offset * progress * cell_size),
-            round(y_offset * progress * cell_size),
+            round((column_offset - row_offset) * progress * cell_size / 2),
+            round((column_offset + row_offset) * progress * cell_size / 4),
         )
 
     def _get_player_image(self, direction: str):
         if direction not in DIRECTION_KEYS.values():
             direction = Direction.DOWN
-        return self._get_asset_image(f"player_goose_{direction}")
+        progress = self._hop_elapsed / HOP_DURATION if self._hop_start_position else 0
+        frame = min(2, max(0, int(progress * 3)))
+        image = self._get_asset_image(f"player_goose_{direction}_{frame}")
+        return image or self._get_asset_image(f"player_goose_{direction}")
 
     def _get_bike_image(self, bike):
         frame = int(getattr(bike, "distance_progress", 0.0) * BIKE_FRAME_COUNT)
         image = self._get_asset_image(f"bike_frame_{frame % BIKE_FRAME_COUNT}")
-        if (
-            image is not None
-            and getattr(bike, "direction", Direction.RIGHT) == Direction.LEFT
-        ):
+        direction = getattr(bike, "direction", Direction.RIGHT)
+        if image is not None and direction == Direction.LEFT:
             return pygame.transform.flip(image, True, False)
         return image
 
@@ -546,11 +545,9 @@ class PlayingScene(EmptyScene):
         return self._get_asset_image(TURTLE_IMAGE_NAMES.get(direction, "turtle_right"))
 
     def _get_goal_image(self, stage_id):
-        return (
-            None
-            if stage_id is None
-            else self._get_asset_image(f"goal_stage_{stage_id}")
-        )
+        if stage_id is None:
+            return None
+        return self._get_asset_image(f"goal_stage_{stage_id}")
 
     def _get_student_crowd_warning_image(self, crowd):
         frame = (
@@ -565,11 +562,16 @@ class PlayingScene(EmptyScene):
         return self._get_asset_image(f"student_crowd_runner_{runner}_frame_{frame}")
 
     def _cell_rect(self, grid_rect, cell_size: int, position: Position):
-        left = grid_rect.left + round(position.column * cell_size)
-        top = grid_rect.top + round(position.row * cell_size)
-        right = grid_rect.left + round((position.column + 1) * cell_size)
-        bottom = grid_rect.top + round((position.row + 1) * cell_size)
-        return pygame.Rect(left, top, max(1, right - left), max(1, bottom - top))
+        rect = pygame.Rect(0, 0, round(cell_size), round(cell_size / 2))
+        rect.center = (
+            grid_rect.left + round((position.column - position.row) * cell_size / 2),
+            grid_rect.top + round((position.column + position.row + 1) * cell_size / 4),
+        )
+        return rect
+
+    def _tile_points(self, grid_rect, cell_size, position):
+        rect = self._cell_rect(grid_rect, cell_size, position)
+        return rect.midtop, rect.midright, rect.midbottom, rect.midleft
 
 
 class FailedScene(EmptyScene):

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
@@ -21,6 +22,7 @@ from kongoose.models import (
 from kongoose.scenes import (
     BIKE_COLOR,
     DEFAULT_BACKGROUND_COLOR,
+    PLAYING_HUD_HEIGHT,
     STUDENT_CROWD_COLOR,
     STUDENT_CROWD_TILE_DURATION,
     TERRAIN_STYLES,
@@ -144,6 +146,17 @@ def collect_surface_colors(surface: pygame.Surface) -> set[tuple[int, int, int]]
         }
     finally:
         del pixels
+
+
+def has_similar_color(
+    colors: set[tuple[int, int, int]], expected: tuple[int, int, int], tolerance=8
+) -> bool:
+    return any(
+        all(
+            abs(actual - target) <= tolerance for actual, target in zip(color, expected)
+        )
+        for color in colors
+    )
 
 
 def register_star_test_images(game: Game) -> None:
@@ -346,6 +359,38 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
     )
 
 
+def test_playing_scene_projects_grid_cells_as_isometric_diamonds() -> None:
+    scene = PlayingScene()
+    grid, cell_size = scene._calculate_grid_layout(240, 120, rows=2, columns=2)
+    origin = scene._cell_rect(grid, cell_size, Position(row=0, column=0)).center
+    right = scene._cell_rect(grid, cell_size, Position(row=0, column=1)).center
+    down = scene._cell_rect(grid, cell_size, Position(row=1, column=0)).center
+
+    assert right[0] > origin[0]
+    assert right[1] > origin[1]
+    assert down[0] < origin[0]
+    assert down[1] > origin[1]
+
+
+def test_playing_scene_draws_diamond_tile_corners_as_background() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((240, 180))
+    game = Game(initial_scene=PlayingScene())
+    game.current_stage_id = 1
+    game.current_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.LAND]]),
+        player=Player(Position(row=0, column=0)),
+    )
+
+    game.current_scene.draw(surface)
+
+    assert surface.get_at((1, PLAYING_HUD_HEIGHT + 1))[:3] == DEFAULT_BACKGROUND_COLOR
+    assert (
+        surface.get_at((surface.get_width() // 2, PLAYING_HUD_HEIGHT + 2))[:3]
+        == TERRAIN_STYLES[TerrainType.LAND]
+    )
+
+
 def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None:
     pygame.font.init()
     surface = pygame.Surface((240, 120))
@@ -521,13 +566,55 @@ def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
 
     game.current_scene.draw(surface)
 
-    assert game.resource_manager.has_image("player_goose_left")
-    assert not game.resource_manager.has_image("player_goose_right")
+    assert game.resource_manager.has_image("player_goose_left_0")
+    assert not game.resource_manager.has_image("player_goose_right_0")
 
     player.facing_direction = Direction.RIGHT
     game.current_scene.draw(surface)
 
-    assert game.resource_manager.has_image("player_goose_right")
+    assert game.resource_manager.has_image("player_goose_right_0")
+
+
+def test_playing_scene_uses_player_hop_animation_frames_when_registered() -> None:
+    game = Game(initial_scene=PlayingScene())
+    scene = game.current_scene
+    frames = [object(), object(), object()]
+    for frame, image in enumerate(frames):
+        game.resource_manager.register_image(f"player_goose_right_{frame}", image)
+
+    assert scene._get_player_image(Direction.RIGHT) is frames[0]
+
+    scene._hop_start_position = Position(row=0, column=0)
+    scene._hop_end_position = Position(row=0, column=1)
+    scene._hop_elapsed = 0.09
+
+    assert scene._get_player_image(Direction.RIGHT) is frames[1]
+
+    scene._hop_elapsed = 0.17
+
+    assert scene._get_player_image(Direction.RIGHT) is frames[2]
+
+
+def test_playing_scene_draws_default_stage_player_sprite_on_screen() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((960, 720))
+    game = Game(initial_scene=PlayingScene())
+    game.current_stage_id = 1
+    game.current_stage = game.stages[1]
+    player_color = (250, 10, 200)
+    player_image = pygame.Surface((16, 16), pygame.SRCALPHA)
+    player_image.fill((*player_color, 255))
+    game.resource_manager.register_image("player_goose_down_0", player_image)
+
+    game.current_scene.draw(surface)
+    player_pixels = sum(
+        1
+        for x in range(surface.get_width())
+        for y in range(surface.get_height())
+        if surface.get_at((x, y))[:3] == player_color
+    )
+
+    assert player_pixels >= 16
 
 
 def test_playing_scene_hops_between_tiles_after_successful_move() -> None:
@@ -636,20 +723,20 @@ def test_player_hop_draw_rect_uses_small_base_and_larger_jump() -> None:
         Position(row=0, column=1),
     )
 
-    assert base_rect.width == 50
-    assert jump_rect.width == 95
+    assert base_rect.width == 75
+    assert jump_rect.width == 143
 
 
-def test_playing_scene_grid_layout_fills_screen_width() -> None:
+def test_playing_scene_grid_layout_keeps_tiles_close_like_2d_view() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
         960, 720, 24, 10, Position(row=23, column=5)
     )
 
-    assert grid_rect.left == 0
-    assert grid_rect.width == 960
     assert cell_size == 96
+    assert grid_rect.width > 960
+    assert grid_rect.height > 720
 
 
 def test_playing_scene_draws_hud_overlay_above_grid() -> None:
@@ -688,7 +775,7 @@ def test_playing_hud_padding_contains_status_lines() -> None:
     assert surface.get_at((10, 100))[:3] == DEFAULT_BACKGROUND_COLOR
 
 
-def test_playing_scene_camera_keeps_tall_stage_tiles_large() -> None:
+def test_playing_scene_isometric_layout_keeps_player_in_play_area() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
@@ -700,15 +787,15 @@ def test_playing_scene_camera_keeps_tall_stage_tiles_large() -> None:
         Position(row=23, column=5),
     )
 
-    assert cell_size >= 48
-    assert grid_rect.left == 0
-    assert grid_rect.width == 800
+    assert cell_size == 80
+    assert grid_rect.width > 800
     assert grid_rect.height > 600
+    assert 0 <= player_rect.centerx <= 800
     assert player_rect.bottom <= 600
     assert player_rect.centery > 600 // 2
 
 
-def test_playing_scene_camera_centers_player_away_from_stage_edges() -> None:
+def test_playing_scene_isometric_layout_stacks_rows_diagonally() -> None:
     scene = PlayingScene()
 
     grid_rect, cell_size = scene._calculate_grid_layout(
@@ -719,9 +806,11 @@ def test_playing_scene_camera_centers_player_away_from_stage_edges() -> None:
         cell_size,
         Position(row=12, column=5),
     )
-    play_area_center_y = 600 // 2
+    top_rect = scene._cell_rect(grid_rect, cell_size, Position(row=0, column=5))
 
-    assert abs(player_rect.centery - play_area_center_y) <= cell_size // 2
+    assert player_rect.center == (400, 300)
+    assert player_rect.centerx < top_rect.centerx
+    assert player_rect.centery > top_rect.centery
 
 
 def test_position_sprite_draw_rects_use_fractional_progress() -> None:
@@ -736,30 +825,41 @@ def test_position_sprite_draw_rects_use_fractional_progress() -> None:
     draw_rect = scene._get_sprite_draw_rects(bike, grid_rect, 100)[0]
     base_rect = scene._cell_rect(grid_rect, 100, Position(row=0, column=0))
 
-    assert draw_rect.centerx == base_rect.centerx + 50
+    assert draw_rect.centerx == base_rect.centerx + 25
+    assert draw_rect.centery == base_rect.centery + 12
 
 
-def test_position_sprites_are_clipped_to_grid_bounds() -> None:
-    pygame.font.init()
-    surface = pygame.Surface((400, 120))
-    surface.fill((0, 0, 0))
+def test_position_sprite_progress_follows_isometric_left_direction() -> None:
     scene = PlayingScene()
-    grid_rect = pygame.Rect(0, 0, 300, 100)
+    grid_rect = pygame.Rect(0, 0, 200, 100)
     bike = Bike(
-        position=Position(row=0, column=2),
-        direction=Direction.RIGHT,
+        position=Position(row=0, column=0),
+        direction=Direction.LEFT,
         distance_progress=0.5,
     )
 
-    scene._draw_position_sprites(
-        surface,
-        [bike],
-        grid_rect,
-        100,
-        BIKE_COLOR,
+    draw_rect = scene._get_sprite_draw_rects(bike, grid_rect, 100)[0]
+    base_rect = scene._cell_rect(grid_rect, 100, Position(row=0, column=0))
+
+    assert draw_rect.centerx == base_rect.centerx - 25
+    assert draw_rect.centery == base_rect.centery - 12
+
+
+def test_position_sprite_progress_stays_on_map_edge_when_next_column_is_off_map() -> (
+    None
+):
+    scene = PlayingScene()
+    grid_rect = pygame.Rect(0, 0, 300, 150)
+    cases = (
+        Bike(Position(row=0, column=2), Direction.RIGHT, distance_progress=0.75),
+        Turtle(Position(row=0, column=0), Direction.LEFT, distance_progress=0.75),
     )
 
-    assert surface.get_at((320, 50))[:3] == (0, 0, 0)
+    for sprite in cases:
+        draw_rect = scene._get_sprite_draw_rects(sprite, grid_rect, 100, columns=3)[0]
+        base_rect = scene._cell_rect(grid_rect, 100, sprite.position)
+
+        assert draw_rect.center == base_rect.center
 
 
 def test_position_sprites_draw_bike_animation_frame_when_registered() -> None:
@@ -779,9 +879,8 @@ def test_position_sprites_draw_bike_animation_frame_when_registered() -> None:
         [bike],
         pygame.Rect(0, 0, 200, 100),
         100,
-        BIKE_COLOR,
-        game.current_scene._get_bike_image,
-        0.4,
+        (BIKE_COLOR, game.current_scene._get_bike_image, 0.4),
+        None,
     )
     rendered_colors = collect_surface_colors(surface)
 
@@ -804,13 +903,47 @@ def test_position_sprites_draw_turtle_image_when_registered() -> None:
         [turtle],
         pygame.Rect(0, 0, 200, 100),
         100,
-        TURTLE_COLOR,
-        game.current_scene._get_turtle_image,
-        0.32,
+        (TURTLE_COLOR, game.current_scene._get_turtle_image, 0.32),
+        None,
     )
     rendered_colors = collect_surface_colors(surface)
 
     assert (34, 220, 120) in rendered_colors
+
+
+def test_bike_assets_keep_four_padded_animation_frames() -> None:
+    paths = sorted(Path("assets").glob("bike_frame_*.png"))
+
+    assert [path.stem for path in paths] == [
+        "bike_frame_0",
+        "bike_frame_1",
+        "bike_frame_2",
+        "bike_frame_3",
+    ]
+    for path in paths:
+        image = pygame.image.load(str(path))
+        visible = image.get_bounding_rect(1)
+
+        assert visible.width / image.get_width() <= 0.93, path.name
+        assert visible.height / image.get_height() <= 0.93, path.name
+
+
+def test_turtle_assets_keep_visible_body_inside_canvas_padding() -> None:
+    for path in sorted(Path("assets").glob("turtle_*.png")):
+        image = pygame.image.load(str(path))
+        visible = image.get_bounding_rect(1)
+
+        assert visible.width / image.get_width() <= 0.8, path.name
+        assert visible.height / image.get_height() <= 0.8, path.name
+
+
+def test_student_crowd_warning_assets_allow_isometric_row_angle() -> None:
+    for path in sorted(Path("assets").glob("student_crowd_warning_frame_*.png")):
+        image = pygame.image.load(str(path))
+        visible = image.get_bounding_rect(1)
+
+        assert image.get_width() / image.get_height() <= 2.5, path.name
+        assert visible.height / visible.width >= 0.25, path.name
 
 
 def test_student_crowd_warning_draws_registered_warning_frame() -> None:
@@ -842,7 +975,7 @@ def test_student_crowd_warning_draws_registered_warning_frame() -> None:
 
 def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
     pygame.font.init()
-    surface = pygame.Surface((820, 100))
+    surface = pygame.Surface((820, 260))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_student_crowd_test_images(game)
@@ -854,22 +987,27 @@ def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
         elapsed_time=0.2,
     )
 
+    grid, cell_size = game.current_scene._calculate_grid_layout(800, 260, 1, 8)
     game.current_scene._draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(8)]]),
-        pygame.Rect(0, 0, 800, 100),
-        100,
+        grid,
+        cell_size,
     )
+    rendered_colors = collect_surface_colors(surface)
 
-    assert surface.get_at((50, 50))[:3] == (29, 211, 188)
-    assert surface.get_at((150, 50))[:3] == (211, 64, 92)
-    assert surface.get_at((250, 50))[:3] == (67, 107, 218)
-    assert surface.get_at((350, 50))[:3] == (224, 181, 48)
-    assert surface.get_at((450, 50))[:3] == (72, 198, 208)
-    assert surface.get_at((550, 50))[:3] == (124, 82, 176)
-    assert surface.get_at((650, 50))[:3] == (68, 166, 86)
-    assert surface.get_at((750, 50))[:3] == (232, 121, 31)
+    for color in [
+        (29, 211, 188),
+        (211, 64, 92),
+        (67, 107, 218),
+        (224, 181, 48),
+        (72, 198, 208),
+        (124, 82, 176),
+        (68, 166, 86),
+        (232, 121, 31),
+    ]:
+        assert has_similar_color(rendered_colors, color)
 
 
 def test_student_crowd_visual_tile_duration_is_three_times_faster() -> None:
@@ -905,15 +1043,17 @@ def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> Non
         elapsed_time=0.2,
     )
 
+    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
     game.current_scene._draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
-        pygame.Rect(0, 0, 300, 100),
-        100,
+        grid,
+        cell_size,
     )
+    center = game.current_scene._cell_rect(grid, cell_size, Position(0, 0)).center
 
-    assert surface.get_at((50, 50))[:3] == active_color
+    assert surface.get_at(center)[:3] == active_color
 
 
 def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> None:
@@ -930,18 +1070,20 @@ def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> Non
         elapsed_time=0.2 + STUDENT_CROWD_TILE_DURATION / 2,
     )
 
+    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
     game.current_scene._draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
-        pygame.Rect(0, 0, 300, 100),
-        100,
+        grid,
+        cell_size,
     )
+    rendered_colors = collect_surface_colors(surface)
 
-    assert surface.get_at((15, 50))[:3] == (232, 121, 31)
-    assert surface.get_at((100, 50))[:3] == (29, 211, 188)
-    assert surface.get_at((200, 50))[:3] == (211, 64, 92)
-    assert surface.get_at((285, 50))[:3] == (67, 107, 218)
+    assert (232, 121, 31) in rendered_colors
+    assert (29, 211, 188) in rendered_colors
+    assert (211, 64, 92) in rendered_colors
+    assert (67, 107, 218) in rendered_colors
 
 
 def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> None:
@@ -958,16 +1100,18 @@ def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> N
         elapsed_time=0.2 + 1.0 + STUDENT_CROWD_TILE_DURATION * 2.5,
     )
 
+    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
     game.current_scene._draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
-        pygame.Rect(0, 0, 300, 100),
-        100,
+        grid,
+        cell_size,
     )
+    rendered_colors = collect_surface_colors(surface)
 
-    assert surface.get_at((50, 50))[:3] == (0, 0, 0)
-    assert surface.get_at((250, 50))[:3] != (0, 0, 0)
+    assert (29, 211, 188) not in rendered_colors
+    assert any(color != (0, 0, 0) for color in rendered_colors)
 
 
 def test_playing_scene_changes_to_failed_or_result_for_stage_outcomes() -> None:

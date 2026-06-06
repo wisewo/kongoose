@@ -146,7 +146,7 @@ Stage 2의 기본 속도는 4.8-5.2 tiles/s, Stage 4의 기본 속도는 5.8-6.2
 `RIVER` 지형 여부를 보고 반복 재생과 정지를 관리한다.
 화면 밖으로 나간 자전거는 다시 비활성화된다. 거북이는 한 칸짜리 이동 발판으로 맵 너비 안에서
 순환한다. 자전거와 거북이의 판정은 격자 좌표를 유지하되, 렌더링에서는 이동
-진행률을 픽셀 오프셋으로 반영해 부드럽게 움직이는 것처럼 표현한다.
+진행률을 등각 투영 방향의 화면 오프셋으로 반영해 부드럽게 움직이는 것처럼 표현한다.
 
 ## 제외 범위
 
@@ -168,3 +168,14 @@ does not support multi-tile turtles or moving within a turtle body.
 
 Star display note: star ratings should render with star image assets when the
 assets are available. Text stars are only a fallback for missing images.
+
+Camera note: the isometric play view keeps tile scale close to the original
+2D width-filling view, and long stages may extend off screen while the camera
+follows the player.
+
+Moving sprite render note: bikes and turtles do not interpolate into a phantom
+off-map tile at the left or right map edge.
+
+Player sprite note: Geon-goose can use three frame direction-specific hop
+sprites named `player_goose_<direction>_<frame>.png`, with the single direction
+sprite names kept as fallbacks.
