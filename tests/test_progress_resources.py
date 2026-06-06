@@ -1,4 +1,5 @@
 import json
+from inspect import signature
 
 from kongoose.models import SoundCue
 from kongoose.resources import ResourceManager, SoundManager
@@ -106,30 +107,60 @@ def test_sound_manager_ignores_missing_cues_and_plays_registered_sound() -> None
     assert sound.played_loops == [0]
 
 
-def test_sound_manager_passes_loop_count_and_respects_cooldown() -> None:
-    current_time = 10.0
+def test_sound_manager_keeps_playback_policy_simple() -> None:
+    play_parameters = signature(SoundManager.play).parameters
 
-    def now() -> float:
-        return current_time
+    assert set(play_parameters) == {"self", "cue", "loops", "volume"}
+    assert set(signature(SoundManager.stop).parameters) == {"self", "cue"}
 
-    sound_manager = SoundManager(clock=now)
+
+def test_sound_manager_passes_loop_count_and_optional_volume() -> None:
+    sound_manager = SoundManager()
     sound = FakeSound()
     sound_manager.register_sound(SoundCue.BACKGROUND_MUSIC, sound)
 
-    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, loops=-1) is True
-    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, cooldown=1.0) is False
+    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, loops=-1, volume=0.75) is True
+    assert sound.played_loops == [-1]
+    assert sound.channels[0].volumes == [0.75]
 
-    current_time = 11.1
 
-    assert sound_manager.play(SoundCue.BACKGROUND_MUSIC, cooldown=1.0) is True
-    assert sound.played_loops == [-1, 0]
+def test_sound_manager_stops_the_last_channel_for_a_cue() -> None:
+    sound_manager = SoundManager()
+    sound = FakeSound()
+    sound_manager.register_sound(SoundCue.BACKGROUND_MUSIC, sound)
+
+    sound_manager.play(SoundCue.BACKGROUND_MUSIC, loops=-1)
+    sound_manager.stop(SoundCue.BACKGROUND_MUSIC)
+    sound_manager.stop("missing")
+
+    assert sound.channels[0].stopped
 
 
 class FakeSound:
     def __init__(self) -> None:
         self.play_count = 0
         self.played_loops: list[int] = []
+        self.channels: list[FakeChannel] = []
 
-    def play(self, loops: int = 0) -> None:
+    def play(self, loops: int = 0):
         self.play_count += 1
         self.played_loops.append(loops)
+        channel = FakeChannel()
+        self.channels.append(channel)
+        return channel
+
+    def stop(self) -> None:
+        for channel in self.channels:
+            channel.stop()
+
+
+class FakeChannel:
+    def __init__(self) -> None:
+        self.volumes: list[float] = []
+        self.stopped = False
+
+    def set_volume(self, volume: float) -> None:
+        self.volumes.append(volume)
+
+    def stop(self) -> None:
+        self.stopped = True

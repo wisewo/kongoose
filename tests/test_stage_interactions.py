@@ -3,10 +3,9 @@ from kongoose.models import (
     MOVE_CLEARED,
     MOVE_FAILED,
     MOVE_MOVED,
-    UPDATE_BIKE_AMBIENCE,
     UPDATE_FAILED,
-    UPDATE_RUNNING_CREW_ACTIVE,
     UPDATE_SAFE,
+    UPDATE_STUDENT_CROWD_ACTIVE,
     UPDATE_TURTLE_RIDE,
     UPDATE_WARNING,
     Direction,
@@ -14,7 +13,7 @@ from kongoose.models import (
     Position,
     TerrainType,
 )
-from kongoose.stage import Bike, Player, RunningCrew, Stage, Turtle
+from kongoose.stage import Bike, BikeLane, Player, Stage, StudentCrowd, Turtle
 from kongoose.terrain import TerrainMap
 
 
@@ -84,26 +83,26 @@ def test_stage_update_fails_when_bike_moves_into_player() -> None:
     assert stage.failure_reason == FailureReason.HIT_BIKE
 
 
-def test_running_crew_warns_before_active_collision() -> None:
+def test_student_crowd_warns_before_active_collision() -> None:
     stage = make_stage(
         [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]],
         Position(row=0, column=1),
     )
-    crew = RunningCrew(row=0, columns=3, warning_time=0.5, active_duration=1.0)
-    stage.running_crews.append(crew)
+    crowd = StudentCrowd(row=0, columns=3, warning_time=0.5, active_duration=1.0)
+    stage.student_crowds.append(crowd)
 
     warning = stage.update(0.25)
 
     assert warning == UPDATE_WARNING
-    assert not crew.occupies(Position(row=0, column=1))
+    assert not crowd.occupies(Position(row=0, column=1))
 
     failure = stage.update(0.25)
 
     assert failure == UPDATE_FAILED
-    assert stage.failure_reason == FailureReason.HIT_RUNNING_CREW
+    assert stage.failure_reason == FailureReason.HIT_STUDENT_CROWD
 
 
-def test_running_crew_reports_active_once_when_warning_ends() -> None:
+def test_student_crowd_reports_active_once_when_warning_ends() -> None:
     stage = make_stage(
         [
             [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
@@ -111,16 +110,16 @@ def test_running_crew_reports_active_once_when_warning_ends() -> None:
         ],
         Position(row=1, column=1),
     )
-    crew = RunningCrew(row=0, columns=3, warning_time=0.5, active_duration=1.0)
-    stage.running_crews.append(crew)
+    crowd = StudentCrowd(row=0, columns=3, warning_time=0.5, active_duration=1.0)
+    stage.student_crowds.append(crowd)
 
     warning = stage.update(0.25)
     active = stage.update(0.25)
     still_active = stage.update(0.25)
 
     assert warning == UPDATE_WARNING
-    assert active == UPDATE_RUNNING_CREW_ACTIVE
-    assert still_active != UPDATE_RUNNING_CREW_ACTIVE
+    assert active == UPDATE_STUDENT_CROWD_ACTIVE
+    assert still_active != UPDATE_STUDENT_CROWD_ACTIVE
 
 
 def test_player_fails_on_river_without_turtle() -> None:
@@ -186,7 +185,7 @@ def test_player_fails_when_turtle_carries_them_off_screen() -> None:
         speed=1.0,
     )
     stage.turtles.append(turtle)
-    stage.player.ride_turtle(turtle)
+    stage.player.mounted_turtle = turtle
 
     result = stage.update(1.0)
 
@@ -211,7 +210,20 @@ def test_stage_update_wraps_bike_that_moves_past_right_edge() -> None:
     assert bike.position == Position(row=0, column=0)
 
 
-def test_bike_wave_stage_starts_with_candidate_bikes_inactive() -> None:
+def test_stage_update_does_not_emit_bike_sound_event() -> None:
+    stage = make_stage(
+        [
+            [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
+            [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
+        ],
+        Position(row=1, column=0),
+    )
+    stage.bikes.append(Bike(position=Position(row=0, column=0)))
+
+    assert stage.update(0.1) == UPDATE_SAFE
+
+
+def test_bike_lane_stage_starts_with_pool_bikes_inactive() -> None:
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -225,15 +237,18 @@ def test_bike_wave_stage_starts_with_candidate_bikes_inactive() -> None:
                 position=Position(row=1, column=0),
                 direction=Direction.RIGHT,
                 speed=0.0,
+                is_active=False,
             ),
             Bike(
                 position=Position(row=0, column=0),
                 direction=Direction.RIGHT,
                 speed=9.0,
+                is_active=False,
             ),
         ],
-        bike_waves_enabled=True,
-        bike_wave_interval=0.5,
+        bike_lanes=[
+            BikeLane(row=1, direction=Direction.RIGHT, speed=4.0, spawn_gap=0.5),
+        ],
     )
 
     stage.initialize()
@@ -241,70 +256,10 @@ def test_bike_wave_stage_starts_with_candidate_bikes_inactive() -> None:
     assert {bike.position.row for bike in stage.bikes} == {0, 1}
     assert not any(bike.is_active for bike in stage.bikes)
     assert stage.update(0.49) == UPDATE_SAFE
-    assert not any(bike.is_active for bike in stage.bikes)
-
-
-def test_bike_wave_warns_before_scripted_row_activates() -> None:
-    stage = Stage(
-        terrain_map=TerrainMap(
-            [
-                [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
-            ]
-        ),
-        player=Player(Position(row=0, column=1)),
-        bikes=[
-            Bike(
-                position=Position(row=1, column=0),
-                direction=Direction.RIGHT,
-                speed=9.0,
-            )
-        ],
-        bike_waves_enabled=True,
-        bike_wave_interval=2.0,
-        bike_wave_warning_lookahead=1.0,
-    )
-    stage.initialize()
-
-    warning = stage.update(1.0)
-    assert warning == UPDATE_BIKE_AMBIENCE
-    assert stage.peek_warning_bike_row() == 1
-
-    quiet = stage.update(0.99)
-    appeared = stage.update(0.01)
-
-    assert quiet != UPDATE_BIKE_AMBIENCE
-    assert appeared == UPDATE_BIKE_AMBIENCE
     assert [bike.position.row for bike in stage.bikes if bike.is_active] == [1]
 
 
-def test_bike_wave_interval_allows_split_frame_accumulation() -> None:
-    stage = Stage(
-        terrain_map=TerrainMap(
-            [
-                [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
-            ]
-        ),
-        player=Player(Position(row=0, column=1)),
-        bikes=[
-            Bike(
-                position=Position(row=1, column=0),
-                direction=Direction.RIGHT,
-                speed=9.0,
-            )
-        ],
-        bike_waves_enabled=True,
-        bike_wave_interval=0.8,
-        bike_wave_warning_lookahead=0.0,
-    )
-    stage.initialize()
-
-    assert stage.update(0.7) == UPDATE_SAFE
-    assert stage.update(0.1) == UPDATE_BIKE_AMBIENCE
-
-
-def test_bike_wave_repeats_scripted_rows_in_data_order() -> None:
+def test_bike_lanes_spawn_independently_from_offsets() -> None:
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -315,62 +270,62 @@ def test_bike_wave_repeats_scripted_rows_in_data_order() -> None:
         ),
         player=Player(Position(row=0, column=1)),
         bikes=[
-            Bike(
-                position=Position(row=1, column=0),
+            Bike(Position(row=1, column=0), Direction.RIGHT, 4.0, is_active=False),
+            Bike(Position(row=2, column=0), Direction.RIGHT, 4.0, is_active=False),
+        ],
+        bike_lanes=[
+            BikeLane(row=1, direction=Direction.RIGHT, speed=4.0, spawn_gap=2.0),
+            BikeLane(
+                row=2,
                 direction=Direction.RIGHT,
-                speed=9.0,
-            ),
-            Bike(
-                position=Position(row=2, column=0),
-                direction=Direction.RIGHT,
-                speed=9.0,
+                speed=4.0,
+                spawn_gap=2.0,
+                initial_offset=0.5,
             ),
         ],
-        bike_waves_enabled=True,
-        bike_wave_interval=2.0,
-        bike_wave_warning_lookahead=1.0,
     )
     stage.initialize()
 
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-    assert stage.peek_warning_bike_row() == 1
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
+    first_update = stage.update(0.1)
+    assert first_update == UPDATE_SAFE
     assert [bike.position.row for bike in stage.bikes if bike.is_active] == [1]
 
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-    assert stage.peek_warning_bike_row() == 2
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-
-    active_rows = {bike.position.row for bike in stage.bikes if bike.is_active}
-
-    assert active_rows == {2}
-
-
-def test_bike_wave_activates_batch_rows_together() -> None:
-    stage = Stage(
-        terrain_map=TerrainMap(
-            [
-                [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
-            ]
-        ),
-        player=Player(Position(row=0, column=1)),
-        bikes=[
-            Bike(Position(row=1, column=0), Direction.RIGHT, 9.0),
-            Bike(Position(row=2, column=0), Direction.RIGHT, 9.0),
-        ],
-        bike_waves_enabled=True,
-        bike_wave_interval=2.0,
-        bike_wave_warning_lookahead=1.0,
-        bike_wave_batch_size=2,
-    )
-    stage.initialize()
-
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
-    assert stage.peek_warning_bike_rows() == (1, 2)
-    assert stage.update(1.0) == UPDATE_BIKE_AMBIENCE
+    second_update = stage.update(0.4)
+    assert second_update == UPDATE_SAFE
     assert {bike.position.row for bike in stage.bikes if bike.is_active} == {1, 2}
+
+
+def test_bike_lane_can_keep_multiple_bikes_active_in_one_row() -> None:
+    stage = Stage(
+        terrain_map=TerrainMap(
+            [
+                [TerrainType.START] + [TerrainType.LAND for _column in range(6)],
+                [TerrainType.LAND for _column in range(7)],
+            ]
+        ),
+        player=Player(Position(row=0, column=1)),
+        bikes=[
+            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0, is_active=False),
+            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0, is_active=False),
+        ],
+        bike_lanes=[
+            BikeLane(
+                row=1,
+                direction=Direction.RIGHT,
+                speed=2.0,
+                spawn_gap=0.5,
+                max_active=2,
+            )
+        ],
+    )
+    stage.initialize()
+
+    stage.update(0.1)
+    stage.update(0.5)
+
+    active_bikes = [bike for bike in stage.bikes if bike.is_active]
+    assert len(active_bikes) == 2
+    assert {bike.position.row for bike in active_bikes} == {1}
 
 
 def test_stage_update_wraps_bike_that_moves_past_left_edge() -> None:
@@ -439,19 +394,19 @@ def test_initialize_restores_dynamic_sprite_positions_and_progress() -> None:
     assert turtle.get_positions() == (Position(row=0, column=1),)
 
 
-def test_initialize_resets_running_crew_elapsed_time() -> None:
+def test_initialize_resets_student_crowd_elapsed_time() -> None:
     stage = make_stage(
         [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]],
         Position(row=0, column=1),
     )
-    crew = RunningCrew(row=0, columns=3, warning_time=0.5, active_duration=1.0)
-    stage.running_crews.append(crew)
+    crowd = StudentCrowd(row=0, columns=3, warning_time=0.5, active_duration=1.0)
+    stage.student_crowds.append(crowd)
 
-    crew.update(0.75)
+    crowd.update(0.75)
     stage.initialize()
 
-    assert crew.elapsed_time == 0.0
-    assert crew.should_warn()
+    assert crowd.elapsed_time == 0.0
+    assert crowd.should_warn()
 
 
 def test_initialize_dismounts_player_from_turtle() -> None:
@@ -461,7 +416,7 @@ def test_initialize_dismounts_player_from_turtle() -> None:
     )
     turtle = Turtle(position=Position(row=0, column=1))
     stage.turtles.append(turtle)
-    stage.player.ride_turtle(turtle)
+    stage.player.mounted_turtle = turtle
 
     stage.initialize()
 

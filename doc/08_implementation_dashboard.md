@@ -27,7 +27,7 @@
 - 메인, 스테이지 선택, 게임 진행, 실패, 결과 화면 전환
 - 방향키 기반 한 칸 이동
 - 4개 고정 스테이지
-- 자전거, 러닝크루, 강, 자라 발판 판정
+- 자전거, 학생 무리, 강, 자라 발판 판정
 - 게임 진행 화면의 얕은 등각 투영 2.5D 표현
 - 클리어 시간 기반 별점
 - 스테이지 해금 상태와 최고 별점 저장
@@ -39,9 +39,9 @@
 |---|---|---|---|---|---|
 | CORE | 공통 골격과 계약 | `Game`, `Scene`, 공통 enum/result 객체, 실행 진입점 | 없음 | 빈 화면이라도 실행되고 Scene 전환 계약이 고정됨 | Done |
 | A | 화면/Scene | `MainScene`, `StageSelectScene`, `PlayingScene`, `FailedScene`, `ResultScene` | CORE | 주요 화면 전환과 입력 처리가 가능함 | Done |
-| A-ISO | 게임 화면 2.5D 렌더링 | `PlayingScene` | A, B, C | 게임 로직은 2D 격자로 유지하고, 진행 화면에서 지형/플레이어/장애물/발판을 얕은 등각 투영으로 표시함 | Todo |
+| A-ISO | 게임 화면 2.5D 렌더링 | `PlayingScene` | A, B, C | 게임 로직은 2D 격자로 유지하고, 진행 화면에서 지형/플레이어/장애물/발판을 얕은 등각 투영으로 표시함 | Done |
 | B | 지형/이동 | `Position`, `TerrainType`, `TerrainMap`, `Player`, `Stage.move_player()` | CORE | 벽/범위 판정과 한 칸 이동이 동작함 | Done |
-| C | 장애물/판정 | `GameSprite`, `Bike`, `RunningCrew`, `Turtle`, `Stage.update()`, `evaluate_player_state()` | B | 충돌, 강 추락, 자라 탑승, 경고 판정이 동작함 | Done |
+| C | 장애물/판정 | `GameSprite`, `Bike`, `StudentCrowd`, `Turtle`, `Stage.update()`, `evaluate_player_state()` | B | 충돌, 강 추락, 자라 탑승, 경고 판정이 동작함 | Done |
 | D | 진행/리소스 | `Progress`, `SaveManager`, `Timer`, `StarRating`, `SoundManager`, `ResourceManager` | CORE | 저장/불러오기, 별점 계산, 사운드/리소스 조회가 동작함 | Done |
 | INT | 통합/플레이 조정 | 전체 모듈 | A, B, C, D | 4개 스테이지를 처음부터 끝까지 플레이 가능함 | Todo |
 
@@ -66,10 +66,10 @@
 | 메인 화면 | 시작, 종료, 스테이지 선택 진입이 가능하다. | Todo |
 | 스테이지 선택 | 해금된 스테이지는 선택 가능하고 잠긴 스테이지는 선택 불가하다. | Todo |
 | 이동 | 방향키 1회 입력마다 한 칸 이동한다. | Todo |
-| 2.5D 표시 | 게임 진행 화면의 지형, 플레이어, 장애물, 발판이 얕은 등각 투영으로 표시되며 판정 결과는 기존 2D 격자 규칙과 일치한다. | Todo |
+| 2.5D 표시 | 게임 진행 화면의 지형, 플레이어, 장애물, 발판이 얕은 등각 투영으로 표시되며 판정 결과는 기존 2D 격자 규칙과 일치한다. | Done |
 | 벽/범위 | 벽과 맵 밖으로는 이동할 수 없다. | Todo |
 | 자전거 | 자전거와 충돌하면 실패 화면으로 전환된다. | Todo |
-| 러닝크루 | 등장 전 경고가 있고, 충돌하면 실패한다. | Todo |
+| 학생 무리 | 등장 전 경고가 있고, 충돌하면 실패한다. | Todo |
 | 강/자라 | 자라 없이 강에 있으면 실패하고, 자라 위에서는 함께 이동한다. | Todo |
 | 클리어 | 목적지 도착 시 결과 화면이 표시된다. | Todo |
 | 별점 | 클리어 시간에 따라 별점이 계산된다. | Todo |

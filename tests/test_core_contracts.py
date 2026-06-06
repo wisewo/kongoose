@@ -13,12 +13,11 @@ from kongoose.models import (
     Position,
     TerrainType,
 )
-from kongoose.scenes import Scene
 from kongoose.stage import Player, Stage, Turtle
 from kongoose.terrain import TerrainMap
 
 
-class DummyScene(Scene):
+class DummyScene:
     def __init__(self) -> None:
         self.entered_game = None
 
@@ -170,7 +169,7 @@ def test_stage_manual_move_leaves_mounted_turtle() -> None:
         player=Player(Position(row=0, column=0)),
         turtles=[turtle],
     )
-    stage.player.ride_turtle(turtle)
+    stage.player.mounted_turtle = turtle
 
     result = stage.move_player(Direction.RIGHT)
 
