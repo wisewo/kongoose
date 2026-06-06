@@ -313,6 +313,15 @@ class PlayingScene(EmptyScene):
                 self._hop_end_position = player.position
                 self._hop_elapsed = 0.0
 
+            if (
+                game.current_scene is self
+                and player is not None
+                and start_position != player.position
+            ):
+                self._hop_start_position = start_position
+                self._hop_end_position = player.position
+                self._hop_elapsed = 0.0
+
     def update(self, dt: float) -> None:
         if self._hop_start_position is not None:
             self._hop_elapsed += dt

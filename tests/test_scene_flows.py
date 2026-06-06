@@ -121,6 +121,35 @@ class LegacyWarningRowStub:
         self.warning_row = 12
 
 
+class StageWarningStub:
+    def __init__(
+        self, player_row: int = 12, warning_row: int = 12, rows: int = 24
+    ) -> None:
+        self.player = type("Player", (), {"position": Position(player_row, 0)})()
+        self.terrain_map = TerrainMap([[TerrainType.LAND] for _ in range(rows)])
+        self.failure_reason: FailureReason | None = None
+        self.warning_row = warning_row
+
+    def peek_warning_bike_row(self) -> int | None:
+        return self.warning_row
+
+
+class BikeWarningVisibilityStub:
+    def __init__(self) -> None:
+        self.player = type("Player", (), {"position": Position(10, 0)})()
+        self.warning_row: int | None = 16
+        self.terrain_map = TerrainMap(
+            [[TerrainType.LAND for _ in range(10)] for _ in range(24)]
+        )
+        self.failure_reason = None
+
+    def initialize(self) -> None:
+        return None
+
+    def update(self, dt: float) -> str:
+        return UPDATE_SAFE
+
+
 class TimerStub:
     def __init__(self) -> None:
         self.reset_count = 0

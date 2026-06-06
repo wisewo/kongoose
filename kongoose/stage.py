@@ -51,6 +51,9 @@ class GameSprite:
     def occupies(self, position: Position) -> bool:
         return position in self.get_positions()
 
+    def occupies(self, position: Position) -> bool:
+        return position in self.get_positions()
+
 
 class Bike(GameSprite):
     pass

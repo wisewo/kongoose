@@ -43,6 +43,13 @@ class SoundManager:
         self._last_played_at[cue] = now
         return True
 
+    def stop(self, cue: str) -> None:
+        channel = self._active_channels.get(cue)
+        if channel is None:
+            return
+        channel.stop()
+        del self._active_channels[cue]
+
 
 class ResourceManager:
     def __init__(self) -> None:
