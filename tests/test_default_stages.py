@@ -41,10 +41,10 @@ def test_default_stages_match_documented_balance_shape() -> None:
     game = Game()
 
     expected_shapes = {
-        1: (21, 7),
-        2: (21, 8),
-        3: (21, 9),
-        4: (24, 10),
+        1: (39, 7),
+        2: (43, 8),
+        3: (45, 9),
+        4: (49, 10),
     }
 
     for stage_id, (rows, columns) in expected_shapes.items():
@@ -85,28 +85,28 @@ def test_default_stages_match_documented_object_counts() -> None:
     assert len(game.stages[3].bikes) == 0
     assert len(game.stages[3].bike_lanes) == 0
     assert len(game.stages[3].student_crowds) == 0
-    assert len(game.stages[3].turtles) == 3
+    assert len(game.stages[3].turtles) == 7
 
     assert len(game.stages[4].bike_lanes) == 8
     assert len(game.stages[4].bikes) == 16
     assert len(game.stages[4].student_crowds) == 1
-    assert len(game.stages[4].turtles) == 3
+    assert len(game.stages[4].turtles) == 7
 
 
 def test_default_stages_have_required_static_terrain() -> None:
     game = Game()
 
     expected_walls = {
-        1: range(9, 14),
-        2: range(12, 18),
-        3: range(6, 13),
-        4: range(18, 28),
+        1: range(24, 31),
+        2: range(28, 37),
+        3: range(22, 31),
+        4: range(36, 49),
     }
     expected_rivers = {
         1: 0,
         2: 0,
-        3: 27,
-        4: 30,
+        3: 54,
+        4: 50,
     }
 
     for stage_id, stage in game.stages.items():
@@ -176,11 +176,11 @@ def test_default_stage_bike_lanes_allow_multiple_bikes_per_row() -> None:
         assert any(active_rows.count(row) >= 2 for row in set(active_rows))
 
 
-def test_default_stage_rivers_cross_map_and_are_not_adjacent() -> None:
+def test_default_stage_rivers_cross_map_and_late_stages_have_adjacent_bands() -> None:
     game = Game()
     river = _river_type()
 
-    for stage in game.stages.values():
+    for stage_id, stage in game.stages.items():
         river_rows = [
             row
             for row in range(stage.terrain_map.rows)
@@ -195,8 +195,8 @@ def test_default_stage_rivers_cross_map_and_are_not_adjacent() -> None:
                 stage.terrain_map.get_terrain(_position(row, column)) == river
                 for column in range(stage.terrain_map.columns)
             )
-            assert row - 1 not in river_rows
-            assert row + 1 not in river_rows
+        if stage_id in (3, 4):
+            assert _has_adjacent_run(river_rows)
 
 
 def test_default_stage_turtles_are_faster_and_stay_on_river_rows() -> None:
@@ -221,6 +221,10 @@ def _all_positions(terrain_map):
     for row in range(terrain_map.rows):
         for column in range(terrain_map.columns):
             yield _position(row, column)
+
+
+def _has_adjacent_run(rows: list[int], length: int = 2) -> bool:
+    return any(all(row + offset in rows for offset in range(length)) for row in rows)
 
 
 def _position(row: int, column: int):

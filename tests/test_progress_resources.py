@@ -8,7 +8,7 @@ from kongoose.timing import StarRating, Timer
 
 
 def test_progress_unlocks_next_stage_and_keeps_best_star_score() -> None:
-    progress = Progress(total_stages=4)
+    progress = Progress()
 
     assert progress.get_unlocked_stages() == [1]
     assert progress.is_stage_unlocked(1)
@@ -27,7 +27,7 @@ def test_progress_unlocks_next_stage_and_keeps_best_star_score() -> None:
 
 def test_save_manager_round_trips_progress_as_json(tmp_path) -> None:
     save_path = tmp_path / "progress.json"
-    progress = Progress(total_stages=4)
+    progress = Progress()
     progress.record_stage_clear(stage_id=1, stars=3)
     progress.record_stage_clear(stage_id=2, stars=1)
 
@@ -38,7 +38,6 @@ def test_save_manager_round_trips_progress_as_json(tmp_path) -> None:
     assert loaded.get_best_stars(1) == 3
     assert loaded.get_best_stars(2) == 1
     assert json.loads(save_path.read_text(encoding="utf-8")) == {
-        "total_stages": 4,
         "unlocked_stages": [1, 2, 3],
         "best_stars": {"1": 3, "2": 1},
     }
@@ -52,13 +51,13 @@ def test_save_manager_returns_default_progress_when_file_is_missing(tmp_path) ->
 
 
 def test_star_rating_uses_stage_balance_thresholds() -> None:
-    assert StarRating.calculate(clear_time=45, stage_id=1) == 3
-    assert StarRating.calculate(clear_time=68, stage_id=1) == 2
-    assert StarRating.calculate(clear_time=100, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=101, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=80, stage_id=4) == 3
-    assert StarRating.calculate(clear_time=120, stage_id=4) == 2
-    assert StarRating.calculate(clear_time=175, stage_id=4) == 1
+    assert StarRating.calculate(clear_time=75, stage_id=1) == 3
+    assert StarRating.calculate(clear_time=113, stage_id=1) == 2
+    assert StarRating.calculate(clear_time=165, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=166, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=120, stage_id=4) == 3
+    assert StarRating.calculate(clear_time=180, stage_id=4) == 2
+    assert StarRating.calculate(clear_time=264, stage_id=4) == 1
 
 
 def test_timer_tracks_elapsed_time_with_injected_clock() -> None:

@@ -122,6 +122,25 @@ def test_student_crowd_reports_active_once_when_warning_ends() -> None:
     assert still_active != UPDATE_STUDENT_CROWD_ACTIVE
 
 
+def test_student_crowd_repeats_warning_and_active_cycle() -> None:
+    stage = make_stage(
+        [
+            [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
+            [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
+        ],
+        Position(row=1, column=1),
+    )
+    crowd = StudentCrowd(row=0, columns=3, warning_time=0.5, active_duration=1.0)
+    stage.student_crowds.append(crowd)
+
+    stage.update(1.5)
+    repeated_warning = stage.update(0.25)
+    repeated_active = stage.update(0.25)
+
+    assert repeated_warning == UPDATE_WARNING
+    assert repeated_active == UPDATE_STUDENT_CROWD_ACTIVE
+
+
 def test_player_fails_on_river_without_turtle() -> None:
     stage = make_stage(
         [[TerrainType.START, TerrainType.RIVER]],

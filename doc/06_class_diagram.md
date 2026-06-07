@@ -167,7 +167,6 @@ classDiagram
         -max_active
         +reset()
         +update(dt)
-        +consume_spawn()
     }
 
     class StudentCrowd {

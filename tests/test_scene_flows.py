@@ -4,6 +4,7 @@ from pathlib import Path
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
+import pytest
 
 from kongoose.game import Game
 from kongoose.models import (
@@ -19,14 +20,18 @@ from kongoose.models import (
     SoundCue,
     TerrainType,
 )
-from kongoose.scenes import (
+from kongoose.rendering import (
     BIKE_COLOR,
     DEFAULT_BACKGROUND_COLOR,
+    HOP_DURATION,
     PLAYING_HUD_HEIGHT,
     STUDENT_CROWD_COLOR,
     STUDENT_CROWD_TILE_DURATION,
     TERRAIN_STYLES,
     TURTLE_COLOR,
+    StageRenderer,
+)
+from kongoose.scenes import (
     FailedScene,
     MainScene,
     PlayingScene,
@@ -69,6 +74,16 @@ class StageStub:
         self.failure_reason: FailureReason | None = None
         self.next_move_result = MOVE_MOVED
         self.next_update_result = UPDATE_SAFE
+        self.terrain_map = TerrainMap(
+            [
+                [TerrainType.START, TerrainType.LAND],
+                [TerrainType.LAND, TerrainType.GOAL],
+            ]
+        )
+        self.player = Player(Position(0, 0))
+        self.bikes = []
+        self.turtles = []
+        self.student_crowds = []
 
     def initialize(self) -> None:
         self.initialized = True
@@ -80,6 +95,11 @@ class StageStub:
     def update(self, dt: float) -> str:
         self.update_count += 1
         return self.next_update_result
+
+
+class IncompleteStageStub:
+    def initialize(self) -> None:
+        return None
 
 
 class TimerStub:
@@ -116,24 +136,26 @@ class SoundManagerStub:
         self.stopped_cues.append(cue)
 
 
-class RandomStub:
-    def __init__(self, uniforms: list[float], randints: list[int]) -> None:
-        self.uniforms = uniforms
-        self.randints = randints
-        self.uniform_calls: list[tuple[float, float]] = []
-        self.randint_calls: list[tuple[int, int]] = []
-
-    def uniform(self, minimum: float, maximum: float) -> float:
-        self.uniform_calls.append((minimum, maximum))
-        return self.uniforms.pop(0)
-
-    def randint(self, minimum: int, maximum: int) -> int:
-        self.randint_calls.append((minimum, maximum))
-        return self.randints.pop(0)
+class BareScene:
+    def enter(self, game: Game) -> None:
+        return None
 
 
 def key_event(key: int) -> pygame.event.Event:
     return pygame.event.Event(pygame.KEYDOWN, key=key)
+
+
+def set_current_stage(game: Game, stage, stage_id: int = 1) -> None:
+    game.stages = {stage_id: stage}
+    game.current_stage_id = stage_id
+
+
+def renderer_without_assets() -> StageRenderer:
+    return StageRenderer(lambda _name: None)
+
+
+def renderer_for_game(game: Game) -> StageRenderer:
+    return StageRenderer(game.resource_manager.get_image)
 
 
 def collect_surface_colors(surface: pygame.Surface) -> set[tuple[int, int, int]]:
@@ -278,7 +300,7 @@ def test_stage_select_draws_best_stars_with_registered_star_images() -> None:
 def test_playing_scene_moves_player_updates_stage_and_returns_to_select() -> None:
     game = Game(initial_scene=PlayingScene())
     stage = StageStub()
-    game.current_stage = stage
+    set_current_stage(game, stage)
 
     game.current_scene.handle_event(key_event(pygame.K_UP))
     game.current_scene.update(0.016)
@@ -330,8 +352,7 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
         turtles=[Turtle(position=Position(row=0, column=3))],
     )
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = stage
-    game.current_stage_id = 1
+    set_current_stage(game, stage)
     register_bike_test_images(game)
     register_turtle_test_images(game)
     register_student_crowd_test_images(game)
@@ -360,11 +381,11 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
 
 
 def test_playing_scene_projects_grid_cells_as_isometric_diamonds() -> None:
-    scene = PlayingScene()
-    grid, cell_size = scene._calculate_grid_layout(240, 120, rows=2, columns=2)
-    origin = scene._cell_rect(grid, cell_size, Position(row=0, column=0)).center
-    right = scene._cell_rect(grid, cell_size, Position(row=0, column=1)).center
-    down = scene._cell_rect(grid, cell_size, Position(row=1, column=0)).center
+    renderer = renderer_without_assets()
+    grid, cell_size = renderer.calculate_grid_layout(240, 120, rows=2, columns=2)
+    origin = renderer.cell_rect(grid, cell_size, Position(row=0, column=0)).center
+    right = renderer.cell_rect(grid, cell_size, Position(row=0, column=1)).center
+    down = renderer.cell_rect(grid, cell_size, Position(row=1, column=0)).center
 
     assert right[0] > origin[0]
     assert right[1] > origin[1]
@@ -376,11 +397,11 @@ def test_playing_scene_draws_diamond_tile_corners_as_background() -> None:
     pygame.font.init()
     surface = pygame.Surface((240, 180))
     game = Game(initial_scene=PlayingScene())
-    game.current_stage_id = 1
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap([[TerrainType.LAND]]),
         player=Player(Position(row=0, column=0)),
     )
+    set_current_stage(game, stage)
 
     game.current_scene.draw(surface)
 
@@ -399,8 +420,7 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
         player=Player(Position(row=0, column=1)),
     )
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = stage
-    game.current_stage_id = 2
+    set_current_stage(game, stage, 2)
     register_goal_test_images(game)
 
     game.current_scene.draw(surface)
@@ -410,94 +430,59 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
     assert (30, 220, 80) not in rendered_colors
 
 
-def test_bike_ambience_does_not_play_on_stages_without_bikes() -> None:
-    game = Game(
-        initial_scene=PlayingScene(),
-        rng=RandomStub(uniforms=[0.1], randints=[]),
-    )
-    game.current_stage = Stage(
-        terrain_map=TerrainMap([[TerrainType.START]]),
-        player=Player(Position(row=0, column=0)),
-    )
+def test_start_stage_plays_fixed_ambience_for_stage() -> None:
+    game = Game()
     game.sound_manager = SoundManagerStub()
 
-    game.update_stage(0.2)
-
-    assert game.sound_manager.played_cues == []
-
-
-def test_bike_ambience_plays_random_bells_with_random_volume() -> None:
-    game = Game(
-        initial_scene=PlayingScene(),
-        rng=RandomStub(uniforms=[1.0, 0.2, 0.65, 1.0, 4.0], randints=[3]),
-    )
-    game.current_stage = Stage(
-        terrain_map=TerrainMap([[TerrainType.START, TerrainType.LAND]]),
-        player=Player(Position(row=0, column=0)),
-        bikes=[Bike(Position(row=0, column=1))],
-    )
-    game.sound_manager = SoundManagerStub()
-
-    game.update_stage(0.5)
-    assert game.sound_manager.played_cues == []
-
-    game.update_stage(0.5)
+    game.start_stage(4)
 
     assert game.sound_manager.played_cues == [
-        (SoundCue.BIKE_AMBIENCE, 0),
-        (SoundCue.BIKE_AMBIENCE, 0),
-        (SoundCue.BIKE_AMBIENCE, 0),
+        (SoundCue.BIKE_AMBIENCE, -1),
+        (SoundCue.WATER_AMBIENCE, -1),
     ]
-    assert [call["volume"] for call in game.sound_manager.played_calls] == [
-        0.2,
-        0.65,
-        1.0,
-    ]
+    assert [call["volume"] for call in game.sound_manager.played_calls] == [0.25, 0.45]
 
 
-def test_start_stage_plays_water_ambience_on_river_stage() -> None:
+def test_starting_stage_without_ambience_stops_stage_ambience() -> None:
     game = Game()
     game.sound_manager = SoundManagerStub()
-
-    game.start_stage(3)
-
-    assert (SoundCue.WATER_AMBIENCE, -1) in game.sound_manager.played_cues
-    assert game.sound_manager.played_calls[-1]["volume"] == 0.45
-
-
-def test_starting_non_river_stage_stops_water_ambience() -> None:
-    game = Game()
-    game.sound_manager = SoundManagerStub()
-    game.start_stage(3)
+    game.start_stage(4)
     game.sound_manager.played_cues.clear()
     game.sound_manager.stopped_cues.clear()
 
     game.start_stage(1)
 
-    assert game.sound_manager.stopped_cues == [SoundCue.WATER_AMBIENCE]
+    assert game.sound_manager.stopped_cues == [
+        SoundCue.BIKE_AMBIENCE,
+        SoundCue.WATER_AMBIENCE,
+    ]
     assert game.sound_manager.played_cues == []
 
 
-def test_failing_river_stage_stops_water_ambience() -> None:
+def test_failing_stage_stops_stage_ambience() -> None:
     game = Game()
     game.sound_manager = SoundManagerStub()
-    game.start_stage(3)
+    game.start_stage(4)
     game.sound_manager.stopped_cues.clear()
 
     game.fail_current_stage(FailureReason.FELL_IN_RIVER)
 
-    assert game.sound_manager.stopped_cues == [SoundCue.WATER_AMBIENCE]
+    assert game.sound_manager.stopped_cues == [
+        SoundCue.BIKE_AMBIENCE,
+        SoundCue.WATER_AMBIENCE,
+    ]
 
 
 def test_student_crowd_sound_plays_on_active_event_without_channel_state() -> None:
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         player=Player(Position(row=0, column=0)),
         student_crowds=[
             StudentCrowd(row=0, columns=3, warning_time=1.0, active_duration=4.17)
         ],
     )
+    set_current_stage(game, stage)
     game.sound_manager = SoundManagerStub()
 
     game._handle_move_result(MOVE_MOVED)
@@ -515,7 +500,7 @@ def test_student_crowd_sound_is_not_managed_as_continuous_channel() -> None:
 
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap(
             [[TerrainType.LAND for _column in range(3)] for _row in range(2)]
         ),
@@ -524,6 +509,7 @@ def test_student_crowd_sound_is_not_managed_as_continuous_channel() -> None:
             StudentCrowd(row=0, columns=3, warning_time=1.0, active_duration=4.17)
         ],
     )
+    set_current_stage(game, stage)
 
     game.update_stage(0.25)
     game.update_stage(0.75)
@@ -538,11 +524,12 @@ def test_turtle_boarding_plays_turtle_sound_once() -> None:
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()
     turtle = Turtle(position=Position(row=0, column=1))
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap([[TerrainType.START, TerrainType.RIVER]]),
         player=Player(Position(row=0, column=0)),
         turtles=[turtle],
     )
+    set_current_stage(game, stage)
 
     game.current_scene.handle_event(key_event(pygame.K_RIGHT))
     game.current_scene.update(0.3)
@@ -562,7 +549,7 @@ def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
         player=player,
     )
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = stage
+    set_current_stage(game, stage)
 
     game.current_scene.draw(surface)
 
@@ -577,22 +564,14 @@ def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
 
 def test_playing_scene_uses_player_hop_animation_frames_when_registered() -> None:
     game = Game(initial_scene=PlayingScene())
-    scene = game.current_scene
+    renderer = renderer_for_game(game)
     frames = [object(), object(), object()]
     for frame, image in enumerate(frames):
         game.resource_manager.register_image(f"player_goose_right_{frame}", image)
 
-    assert scene._get_player_image(Direction.RIGHT) is frames[0]
-
-    scene._hop_start_position = Position(row=0, column=0)
-    scene._hop_end_position = Position(row=0, column=1)
-    scene._hop_elapsed = 0.09
-
-    assert scene._get_player_image(Direction.RIGHT) is frames[1]
-
-    scene._hop_elapsed = 0.17
-
-    assert scene._get_player_image(Direction.RIGHT) is frames[2]
+    assert renderer.player_image(Direction.RIGHT) is frames[0]
+    assert renderer.player_image(Direction.RIGHT, 0.09, True) is frames[1]
+    assert renderer.player_image(Direction.RIGHT, 0.17, True) is frames[2]
 
 
 def test_playing_scene_draws_default_stage_player_sprite_on_screen() -> None:
@@ -600,7 +579,6 @@ def test_playing_scene_draws_default_stage_player_sprite_on_screen() -> None:
     surface = pygame.Surface((960, 720))
     game = Game(initial_scene=PlayingScene())
     game.current_stage_id = 1
-    game.current_stage = game.stages[1]
     player_color = (250, 10, 200)
     player_image = pygame.Surface((16, 16), pygame.SRCALPHA)
     player_image.fill((*player_color, 255))
@@ -625,7 +603,7 @@ def test_playing_scene_hops_between_tiles_after_successful_move() -> None:
         ),
         player=Player(Position(row=0, column=0)),
     )
-    game.current_stage = stage
+    set_current_stage(game, stage)
     scene = game.current_scene
 
     scene.handle_event(key_event(pygame.K_RIGHT))
@@ -644,15 +622,46 @@ def test_playing_scene_hops_between_tiles_after_successful_move() -> None:
     assert stage.player.position == Position(row=0, column=2)
 
 
-def test_successful_hop_plays_start_then_success_sound() -> None:
+def test_playing_scene_camera_focus_moves_smoothly_toward_player() -> None:
+    class RendererSpy:
+        def __init__(self) -> None:
+            self.camera_focuses = []
+
+        def draw(self, *args, **kwargs) -> None:
+            self.camera_focuses.append(kwargs.get("camera_focus"))
+
     game = Game(initial_scene=PlayingScene())
-    game.sound_manager = SoundManagerStub()
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap(
             [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]]
         ),
         player=Player(Position(row=0, column=0)),
     )
+    set_current_stage(game, stage)
+    scene = game.current_scene
+    scene._renderer = RendererSpy()
+
+    scene.draw(object())
+    scene.handle_event(key_event(pygame.K_RIGHT))
+    scene.update(0.05)
+    scene.draw(object())
+
+    assert scene._renderer.camera_focuses[0] == Position(row=0, column=0)
+    camera_focus = scene._renderer.camera_focuses[-1]
+    assert camera_focus.row == 0
+    assert 0 < camera_focus.column < stage.player.position.column
+
+
+def test_successful_hop_plays_start_then_success_sound() -> None:
+    game = Game(initial_scene=PlayingScene())
+    game.sound_manager = SoundManagerStub()
+    stage = Stage(
+        terrain_map=TerrainMap(
+            [[TerrainType.START, TerrainType.LAND, TerrainType.LAND]]
+        ),
+        player=Player(Position(row=0, column=0)),
+    )
+    set_current_stage(game, stage)
     scene = game.current_scene
 
     scene.handle_event(key_event(pygame.K_RIGHT))
@@ -667,30 +676,39 @@ def test_successful_hop_plays_start_then_success_sound() -> None:
     ]
 
 
-def test_blocked_move_plays_blocked_sound_without_starting_hop() -> None:
+def test_blocked_move_plays_blocked_sound_with_blocked_hop() -> None:
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap([[TerrainType.START, TerrainType.WALL]]),
         player=Player(Position(row=0, column=0)),
     )
+    set_current_stage(game, stage)
     scene = game.current_scene
 
     scene.handle_event(key_event(pygame.K_RIGHT))
 
     assert game.sound_manager.played_cues == [(SoundCue.BLOCKED, 0)]
+    assert stage.player.position == Position(row=0, column=0)
+    assert scene._hop_start_position == Position(row=0, column=0)
+    assert scene._hop_end_position == Position(row=0, column=1)
+
+    scene.update(HOP_DURATION)
+
     assert scene._hop_start_position is None
+    assert game.sound_manager.played_cues == [(SoundCue.BLOCKED, 0)]
 
 
-def test_blocked_input_during_hop_plays_blocked_sound_immediately() -> None:
+def test_blocked_input_during_hop_waits_without_collision_sound() -> None:
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()
-    game.current_stage = Stage(
+    stage = Stage(
         terrain_map=TerrainMap(
             [[TerrainType.START, TerrainType.LAND, TerrainType.WALL]]
         ),
         player=Player(Position(row=0, column=0)),
     )
+    set_current_stage(game, stage)
     scene = game.current_scene
 
     scene.handle_event(key_event(pygame.K_RIGHT))
@@ -698,39 +716,58 @@ def test_blocked_input_during_hop_plays_blocked_sound_immediately() -> None:
 
     assert game.current_stage.player.position == Position(row=0, column=1)
     assert scene._hop_start_position == Position(row=0, column=0)
-    assert game.sound_manager.played_cues == [
-        (SoundCue.MOVE_START, 0),
-        (SoundCue.BLOCKED, 0),
-    ]
+    assert game.sound_manager.played_cues == [(SoundCue.MOVE_START, 0)]
 
 
-def test_player_hop_draw_rect_uses_small_base_and_larger_jump() -> None:
-    scene = PlayingScene()
+def test_player_hop_draw_rect_arcs_up_without_large_scaling() -> None:
+    renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 200, 100)
+    start = Position(row=0, column=0)
+    end = Position(row=0, column=1)
 
-    base_rect = scene._get_player_draw_rect(
+    base_rect = renderer.player_draw_rect(
         grid_rect,
         100,
-        Position(row=0, column=0),
+        start,
     )
 
-    scene._hop_start_position = Position(row=0, column=0)
-    scene._hop_end_position = Position(row=0, column=1)
-    scene._hop_elapsed = 0.09
-    jump_rect = scene._get_player_draw_rect(
+    jump_rect = renderer.player_draw_rect(
         grid_rect,
         100,
-        Position(row=0, column=1),
+        end,
+        hop_state=(start, end, HOP_DURATION * 0.5),
     )
+    start_rect = renderer.cell_rect(grid_rect, 100, start)
+    end_rect = renderer.cell_rect(grid_rect, 100, end)
+    linear_mid_y = round((start_rect.centery + end_rect.centery) / 2)
 
     assert base_rect.width == 75
-    assert jump_rect.width == 143
+    assert jump_rect.width <= round(base_rect.width * 1.12)
+    assert jump_rect.centery < linear_mid_y
+
+
+def test_blocked_hop_draw_rect_returns_toward_start() -> None:
+    renderer = renderer_without_assets()
+    grid_rect = pygame.Rect(0, 0, 200, 100)
+    start = Position(row=0, column=0)
+    target = Position(row=0, column=1)
+
+    base_rect = renderer.player_draw_rect(grid_rect, 100, start)
+    target_rect = renderer.cell_rect(grid_rect, 100, target)
+    late_rect = renderer.player_draw_rect(
+        grid_rect,
+        100,
+        start,
+        hop_state=(start, target, HOP_DURATION * 0.95),
+    )
+
+    assert late_rect.centerx < (base_rect.centerx + target_rect.centerx) // 2
 
 
 def test_playing_scene_grid_layout_keeps_tiles_close_like_2d_view() -> None:
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
 
-    grid_rect, cell_size = scene._calculate_grid_layout(
+    grid_rect, cell_size = renderer.calculate_grid_layout(
         960, 720, 24, 10, Position(row=23, column=5)
     )
 
@@ -749,8 +786,7 @@ def test_playing_scene_draws_hud_overlay_above_grid() -> None:
         player=Player(Position(row=23, column=5)),
     )
     game = Game(initial_scene=PlayingScene())
-    game.current_stage = stage
-    game.current_stage_id = 1
+    set_current_stage(game, stage)
 
     game.current_scene.draw(surface)
 
@@ -765,23 +801,23 @@ def test_playing_hud_padding_contains_status_lines() -> None:
     pygame.font.init()
     surface = pygame.Surface((420, 120))
     surface.fill(DEFAULT_BACKGROUND_COLOR)
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
     title_font = pygame.font.Font(None, 44)
     body_font = pygame.font.Font(None, 26)
 
-    scene._draw_playing_hud(surface, title_font, body_font, "1", "12.5s")
+    renderer.draw_playing_hud(surface, title_font, body_font, "1", "12.5s")
 
     assert surface.get_at((10, 60))[:3] != DEFAULT_BACKGROUND_COLOR
     assert surface.get_at((10, 100))[:3] == DEFAULT_BACKGROUND_COLOR
 
 
 def test_playing_scene_isometric_layout_keeps_player_in_play_area() -> None:
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
 
-    grid_rect, cell_size = scene._calculate_grid_layout(
+    grid_rect, cell_size = renderer.calculate_grid_layout(
         800, 600, 24, 10, Position(row=23, column=5)
     )
-    player_rect = scene._cell_rect(
+    player_rect = renderer.cell_rect(
         grid_rect,
         cell_size,
         Position(row=23, column=5),
@@ -796,17 +832,17 @@ def test_playing_scene_isometric_layout_keeps_player_in_play_area() -> None:
 
 
 def test_playing_scene_isometric_layout_stacks_rows_diagonally() -> None:
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
 
-    grid_rect, cell_size = scene._calculate_grid_layout(
+    grid_rect, cell_size = renderer.calculate_grid_layout(
         800, 600, 24, 10, Position(row=12, column=5)
     )
-    player_rect = scene._cell_rect(
+    player_rect = renderer.cell_rect(
         grid_rect,
         cell_size,
         Position(row=12, column=5),
     )
-    top_rect = scene._cell_rect(grid_rect, cell_size, Position(row=0, column=5))
+    top_rect = renderer.cell_rect(grid_rect, cell_size, Position(row=0, column=5))
 
     assert player_rect.center == (400, 300)
     assert player_rect.centerx < top_rect.centerx
@@ -814,7 +850,7 @@ def test_playing_scene_isometric_layout_stacks_rows_diagonally() -> None:
 
 
 def test_position_sprite_draw_rects_use_fractional_progress() -> None:
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 200, 100)
     bike = Bike(
         position=Position(row=0, column=0),
@@ -822,15 +858,15 @@ def test_position_sprite_draw_rects_use_fractional_progress() -> None:
         distance_progress=0.5,
     )
 
-    draw_rect = scene._get_sprite_draw_rects(bike, grid_rect, 100)[0]
-    base_rect = scene._cell_rect(grid_rect, 100, Position(row=0, column=0))
+    draw_rect = renderer.sprite_draw_rects(bike, grid_rect, 100)[0]
+    base_rect = renderer.cell_rect(grid_rect, 100, Position(row=0, column=0))
 
     assert draw_rect.centerx == base_rect.centerx + 25
     assert draw_rect.centery == base_rect.centery + 12
 
 
 def test_position_sprite_progress_follows_isometric_left_direction() -> None:
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 200, 100)
     bike = Bike(
         position=Position(row=0, column=0),
@@ -838,8 +874,8 @@ def test_position_sprite_progress_follows_isometric_left_direction() -> None:
         distance_progress=0.5,
     )
 
-    draw_rect = scene._get_sprite_draw_rects(bike, grid_rect, 100)[0]
-    base_rect = scene._cell_rect(grid_rect, 100, Position(row=0, column=0))
+    draw_rect = renderer.sprite_draw_rects(bike, grid_rect, 100)[0]
+    base_rect = renderer.cell_rect(grid_rect, 100, Position(row=0, column=0))
 
     assert draw_rect.centerx == base_rect.centerx - 25
     assert draw_rect.centery == base_rect.centery - 12
@@ -848,7 +884,7 @@ def test_position_sprite_progress_follows_isometric_left_direction() -> None:
 def test_position_sprite_progress_stays_on_map_edge_when_next_column_is_off_map() -> (
     None
 ):
-    scene = PlayingScene()
+    renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 300, 150)
     cases = (
         Bike(Position(row=0, column=2), Direction.RIGHT, distance_progress=0.75),
@@ -856,8 +892,8 @@ def test_position_sprite_progress_stays_on_map_edge_when_next_column_is_off_map(
     )
 
     for sprite in cases:
-        draw_rect = scene._get_sprite_draw_rects(sprite, grid_rect, 100, columns=3)[0]
-        base_rect = scene._cell_rect(grid_rect, 100, sprite.position)
+        draw_rect = renderer.sprite_draw_rects(sprite, grid_rect, 100, columns=3)[0]
+        base_rect = renderer.cell_rect(grid_rect, 100, sprite.position)
 
         assert draw_rect.center == base_rect.center
 
@@ -868,18 +904,19 @@ def test_position_sprites_draw_bike_animation_frame_when_registered() -> None:
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_bike_test_images(game)
+    renderer = renderer_for_game(game)
     bike = Bike(
         position=Position(row=0, column=0),
         direction=Direction.RIGHT,
         distance_progress=0.5,
     )
 
-    game.current_scene._draw_position_sprites(
+    renderer.draw_position_sprites(
         surface,
         [bike],
         pygame.Rect(0, 0, 200, 100),
         100,
-        (BIKE_COLOR, game.current_scene._get_bike_image, 0.4),
+        (BIKE_COLOR, renderer.bike_image, 0.4),
         None,
     )
     rendered_colors = collect_surface_colors(surface)
@@ -893,17 +930,18 @@ def test_position_sprites_draw_turtle_image_when_registered() -> None:
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_turtle_test_images(game)
+    renderer = renderer_for_game(game)
     turtle = Turtle(
         position=Position(row=0, column=0),
         direction=Direction.RIGHT,
     )
 
-    game.current_scene._draw_position_sprites(
+    renderer.draw_position_sprites(
         surface,
         [turtle],
         pygame.Rect(0, 0, 200, 100),
         100,
-        (TURTLE_COLOR, game.current_scene._get_turtle_image, 0.32),
+        (TURTLE_COLOR, renderer.turtle_image, 0.32),
         None,
     )
     rendered_colors = collect_surface_colors(surface)
@@ -952,6 +990,7 @@ def test_student_crowd_warning_draws_registered_warning_frame() -> None:
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_student_crowd_test_images(game)
+    renderer = renderer_for_game(game)
     crowd = StudentCrowd(
         row=0,
         columns=3,
@@ -960,7 +999,7 @@ def test_student_crowd_warning_draws_registered_warning_frame() -> None:
         elapsed_time=0.5,
     )
 
-    game.current_scene._draw_student_crowds(
+    renderer.draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
@@ -979,6 +1018,7 @@ def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_student_crowd_test_images(game)
+    renderer = renderer_for_game(game)
     crowd = StudentCrowd(
         row=0,
         columns=8,
@@ -987,8 +1027,8 @@ def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
         elapsed_time=0.2,
     )
 
-    grid, cell_size = game.current_scene._calculate_grid_layout(800, 260, 1, 8)
-    game.current_scene._draw_student_crowds(
+    grid, cell_size = renderer.calculate_grid_layout(800, 260, 1, 8)
+    renderer.draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(8)]]),
@@ -1020,6 +1060,7 @@ def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> Non
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
+    renderer = renderer_for_game(game)
     for index in range(4):
         image = pygame.Surface((96, 12), pygame.SRCALPHA)
         image.fill((0, 0, 0, 0))
@@ -1043,15 +1084,15 @@ def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> Non
         elapsed_time=0.2,
     )
 
-    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
-    game.current_scene._draw_student_crowds(
+    grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
+    renderer.draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
         grid,
         cell_size,
     )
-    center = game.current_scene._cell_rect(grid, cell_size, Position(0, 0)).center
+    center = renderer.cell_rect(grid, cell_size, Position(0, 0)).center
 
     assert surface.get_at(center)[:3] == active_color
 
@@ -1062,6 +1103,7 @@ def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> Non
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_student_crowd_test_images(game)
+    renderer = renderer_for_game(game)
     crowd = StudentCrowd(
         row=0,
         columns=3,
@@ -1070,8 +1112,8 @@ def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> Non
         elapsed_time=0.2 + STUDENT_CROWD_TILE_DURATION / 2,
     )
 
-    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
-    game.current_scene._draw_student_crowds(
+    grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
+    renderer.draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
@@ -1092,6 +1134,7 @@ def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> N
     surface.fill((0, 0, 0))
     game = Game(initial_scene=PlayingScene())
     register_student_crowd_test_images(game)
+    renderer = renderer_for_game(game)
     crowd = StudentCrowd(
         row=0,
         columns=3,
@@ -1100,8 +1143,8 @@ def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> N
         elapsed_time=0.2 + 1.0 + STUDENT_CROWD_TILE_DURATION * 2.5,
     )
 
-    grid, cell_size = game.current_scene._calculate_grid_layout(300, 100, 1, 3)
-    game.current_scene._draw_student_crowds(
+    grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
+    renderer.draw_student_crowds(
         surface,
         [crowd],
         TerrainMap([[TerrainType.LAND for _column in range(3)]]),
@@ -1120,8 +1163,7 @@ def test_playing_scene_changes_to_failed_or_result_for_stage_outcomes() -> None:
     timer = TimerStub()
     save_manager = SaveManagerStub()
     sound_manager = SoundManagerStub()
-    game.current_stage = stage
-    game.current_stage_id = 1
+    set_current_stage(game, stage)
     game.progress = ProgressStub({1})
     game.save_manager = save_manager
     game.timer = timer
@@ -1205,3 +1247,73 @@ def test_result_scene_actions_next_restart_select_or_main() -> None:
     game.change_scene(ResultScene())
     game.current_scene.handle_event(key_event(pygame.K_ESCAPE))
     assert isinstance(game.current_scene, MainScene)
+
+
+def test_result_next_requires_current_stage_context() -> None:
+    game = Game(initial_scene=ResultScene())
+
+    with pytest.raises(TypeError):
+        game.current_scene.handle_event(key_event(pygame.K_n))
+
+
+def test_failed_restart_requires_current_stage_context() -> None:
+    game = Game(initial_scene=FailedScene())
+
+    with pytest.raises(KeyError):
+        game.current_scene.handle_event(key_event(pygame.K_r))
+
+
+def test_locked_stage_message_requires_scene_contract() -> None:
+    game = Game(initial_scene=BareScene())
+    game.progress = ProgressStub({2})
+
+    with pytest.raises(AttributeError):
+        game.select_stage(1)
+
+
+def test_start_stage_uses_stage_id_for_ambience() -> None:
+    game = Game(stages={4: IncompleteStageStub()})
+    game.timer = TimerStub()
+    game.sound_manager = SoundManagerStub()
+
+    game.start_stage(4)
+
+    assert game.sound_manager.played_cues == [
+        (SoundCue.BIKE_AMBIENCE, -1),
+        (SoundCue.WATER_AMBIENCE, -1),
+    ]
+
+
+def test_move_sound_requires_stage_player_contract() -> None:
+    game = Game(stages={1: object()})
+    game.current_stage_id = 1
+
+    with pytest.raises(AttributeError):
+        game._handle_move_result(MOVE_MOVED)
+
+
+def test_playing_scene_hop_input_requires_stage_context() -> None:
+    game = Game(initial_scene=PlayingScene(), stages={1: object()})
+    game.current_stage_id = 1
+    game.current_scene._hop_start_position = Position(0, 0)
+
+    with pytest.raises(AttributeError):
+        game.current_scene.handle_event(key_event(pygame.K_RIGHT))
+
+
+def test_failed_scene_draw_requires_failure_reason_context() -> None:
+    game = Game(initial_scene=FailedScene())
+    pygame.font.init()
+    surface = pygame.Surface((640, 480))
+
+    with pytest.raises(AttributeError):
+        game.current_scene.draw(surface)
+
+
+def test_result_scene_draw_requires_clear_context() -> None:
+    game = Game(initial_scene=ResultScene())
+    pygame.font.init()
+    surface = pygame.Surface((640, 480))
+
+    with pytest.raises(TypeError):
+        game.current_scene.draw(surface)

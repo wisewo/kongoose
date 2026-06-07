@@ -1,2 +1,4 @@
+from kongoose.game import Game
+
 if __name__ == "__main__":
-    __import__("kongoose.game", fromlist=["Game"]).Game().run()
+    Game().run()

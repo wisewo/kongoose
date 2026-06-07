@@ -22,10 +22,6 @@ class GameSprite:
     def reset(self) -> None:
         self.__dict__.update(self._initial_state)
 
-    def activate(self) -> None:
-        self.reset()
-        self.is_active = True
-
     def deactivate(self) -> None:
         self.reset()
         self.is_active = False
@@ -65,10 +61,8 @@ class BikeLane:
     def reset(self) -> None:
         self.time_until_spawn = self.initial_offset
 
-    def update(self, dt: float) -> None:
+    def update(self, dt: float) -> bool:
         self.time_until_spawn -= dt
-
-    def consume_spawn(self) -> bool:
         if self.time_until_spawn > TIME_EPSILON:
             return False
         self.time_until_spawn += self.spawn_gap
@@ -87,6 +81,9 @@ class StudentCrowd:
     def update(self, dt: float) -> None:
         was_active = self.is_active()
         self.elapsed_time += dt
+        cycle_duration = self.warning_time + self.active_duration
+        if self.elapsed_time >= cycle_duration:
+            self.elapsed_time %= cycle_duration
         self.became_active = not was_active and self.is_active()
 
     def reset(self) -> None:
@@ -102,9 +99,6 @@ class StudentCrowd:
             <= self.elapsed_time
             < self.warning_time + self.active_duration
         )
-
-    def is_present(self) -> bool:
-        return self.elapsed_time < self.warning_time + self.active_duration
 
     def occupies(self, position: Position) -> bool:
         return (
@@ -172,11 +166,11 @@ class Stage:
         if self.bike_lanes:
             self._deactivate_offscreen_bikes()
         else:
-            self._keep_position_sprites_in_bounds(self.bikes)
+            self._wrap_position_sprites_in_bounds(self.bikes)
         move_result = self.evaluate_player_state()
         if move_result == models.MOVE_FAILED:
             return models.UPDATE_FAILED
-        self._keep_position_sprites_in_bounds(self.turtles)
+        self._wrap_position_sprites_in_bounds(self.turtles)
         if self.player.mounted_turtle is not None:
             self.player.position = self.player.mounted_turtle.position
         self._update_bike_lanes(dt)
@@ -225,8 +219,7 @@ class Stage:
 
     def _update_bike_lanes(self, dt: float) -> None:
         for lane in self.bike_lanes:
-            lane.update(dt)
-            if lane.consume_spawn() and self._active_bike_count(lane) < lane.max_active:
+            if lane.update(dt) and self._active_bike_count(lane) < lane.max_active:
                 self._activate_bike_from_lane(lane)
 
     def _active_bike_count(self, lane: BikeLane) -> int:
@@ -236,15 +229,10 @@ class Stage:
 
     def _activate_bike_from_lane(self, lane: BikeLane) -> None:
         bike = next(
-            (
-                bike
-                for bike in self.bikes
-                if not bike.is_active and bike.position.row == lane.row
-            ),
-            None,
+            bike
+            for bike in self.bikes
+            if not bike.is_active and bike.position.row == lane.row
         )
-        if bike is None:
-            return
         column = (
             0 if lane.direction == Direction.RIGHT else self.terrain_map.columns - 1
         )
@@ -260,7 +248,7 @@ class Stage:
             if bike.is_active and not 0 <= bike.position.column < columns:
                 bike.deactivate()
 
-    def _keep_position_sprites_in_bounds(self, sprites: list[GameSprite]) -> None:
+    def _wrap_position_sprites_in_bounds(self, sprites: list[GameSprite]) -> None:
         for sprite in sprites:
             sprite.position = Position(
                 sprite.position.row,
