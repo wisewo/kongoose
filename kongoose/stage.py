@@ -81,6 +81,9 @@ class StudentCrowd:
     def update(self, dt: float) -> None:
         was_active = self.is_active()
         self.elapsed_time += dt
+        cycle_duration = self.warning_time + self.active_duration
+        if self.elapsed_time >= cycle_duration:
+            self.elapsed_time %= cycle_duration
         self.became_active = not was_active and self.is_active()
 
     def reset(self) -> None:
