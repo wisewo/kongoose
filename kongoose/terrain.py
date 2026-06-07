@@ -22,8 +22,5 @@ class TerrainMap:
     def can_enter(self, position: Position) -> bool:
         return self._is_in_bounds(position) and self.get_terrain(position) != T.WALL
 
-    def has_terrain(self, terrain_type: str) -> bool:
-        return any(terrain_type in row for row in self._map)
-
     def _is_in_bounds(self, position: Position) -> bool:
         return 0 <= position.row < self.rows and 0 <= position.column < self.columns

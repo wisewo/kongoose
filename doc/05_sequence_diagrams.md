@@ -11,7 +11,7 @@
 - `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 강 칸은 `can_enter(position)`에서 막지 않는다.
 - `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다. 같은 판정 규칙은 플레이어 이동 직후와 `Stage.update(dt)` 직후에 모두 적용한다.
 - `Goal` 클래스는 사용하지 않고 `TerrainType.GOAL`로 목적지를 표현한다.
-- 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생하며, 필요한 경우 1회 재생 볼륨을 함께 전달한다. 강물처럼 반복 재생되는 스테이지 환경음은 `SoundManager.stop(cue)`로 스테이지 이탈 시 정지한다.
+- 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생하며, 필요한 경우 볼륨을 함께 전달한다. Stage 2/3/4에 고정 매핑된 자전거/강물 환경음은 `loops=-1`로 반복 재생하고 스테이지 이탈 시 `SoundManager.stop(cue)`로 정지한다.
 - 게임 루프의 시간 흐름은 SSD의 Actor로 두지 않고, `Game.run()` 내부에서 현재 `Scene.update(dt)`와 `Scene.draw(surface)`가 반복되는 흐름으로 표현한다.
 - Use Case와의 Traceability를 위해 `SD-01`부터 `SD-07`까지 `UC-01`부터 `UC-07`에 대응시킨다.
 
@@ -109,8 +109,8 @@ sequenceDiagram
         Game->>Timer: start()
         Game->>Game: change_scene(PlayingScene)
         Game->>PlayingScene: enter(game)
-        opt 강 지형이 있는 스테이지
-            Game->>SoundManager: play(SoundCue.WATER_AMBIENCE, loops=-1, volume)
+        opt 고정 환경음이 있는 스테이지
+            Game->>SoundManager: play(SoundCue.BIKE_AMBIENCE or WATER_AMBIENCE, loops=-1, volume)
         end
         PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 게임 화면 표시
@@ -155,6 +155,8 @@ sequenceDiagram
     alt 이동 불가능한 위치
         TerrainMap-->>Stage: false
         Stage-->>PlayingScene: MoveResult(blocked)
+        PlayingScene->>SoundManager: play(SoundCue.BLOCKED)
+        Note over PlayingScene: 플레이어 위치는 유지하고 막힌 방향으로 짧은 폴짝 애니메이션을 표시한다. 착지 시 MOVE_SUCCESS는 재생하지 않는다.
         PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 현재 게임 화면 갱신
     else 이동 가능한 위치
@@ -238,10 +240,6 @@ sequenceDiagram
         else 안전 상태
             PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
-        end
-
-        opt 자전거 후보가 있는 스테이지의 비주기적 배경 효과음
-            Game->>SoundManager: play(SoundCue.BIKE_AMBIENCE, volume)
         end
     end
 ```

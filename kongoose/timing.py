@@ -25,7 +25,12 @@ class Timer:
 
 
 class StarRating:
-    _THRESHOLDS = {1: (45.0, 68.0), 2: (55.0, 83.0), 3: (65.0, 98.0), 4: (80.0, 120.0)}
+    _THRESHOLDS = {
+        1: (75.0, 113.0),
+        2: (90.0, 135.0),
+        3: (105.0, 158.0),
+        4: (120.0, 180.0),
+    }
 
     @classmethod
     def calculate(cls, clear_time: float, stage_id: int) -> int:

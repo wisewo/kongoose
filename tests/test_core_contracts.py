@@ -89,6 +89,24 @@ def test_game_changes_scene_and_calls_enter() -> None:
     assert scene.entered_game is game
 
 
+def test_game_current_stage_is_derived_from_current_stage_id() -> None:
+    first_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.START]]),
+        player=Player(Position(row=0, column=0)),
+    )
+    second_stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.GOAL]]),
+        player=Player(Position(row=0, column=0)),
+    )
+    game = Game(stages={1: first_stage, 2: second_stage})
+
+    game.current_stage_id = 2
+
+    assert game.current_stage is second_stage
+    with pytest.raises(AttributeError):
+        game.current_stage = first_stage
+
+
 def test_stage_blocks_player_from_walls_and_out_of_bounds() -> None:
     stage = Stage(
         terrain_map=TerrainMap(
