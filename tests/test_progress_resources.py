@@ -1,6 +1,9 @@
 import json
+import wave
 from inspect import signature
+from pathlib import Path
 
+from kongoose.game import DEFAULT_SOUND_PATHS
 from kongoose.models import SoundCue
 from kongoose.resources import ResourceManager, SoundManager
 from kongoose.storage import Progress, SaveManager
@@ -51,13 +54,16 @@ def test_save_manager_returns_default_progress_when_file_is_missing(tmp_path) ->
 
 
 def test_star_rating_uses_stage_balance_thresholds() -> None:
-    assert StarRating.calculate(clear_time=75, stage_id=1) == 3
-    assert StarRating.calculate(clear_time=113, stage_id=1) == 2
-    assert StarRating.calculate(clear_time=165, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=166, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=120, stage_id=4) == 3
-    assert StarRating.calculate(clear_time=180, stage_id=4) == 2
-    assert StarRating.calculate(clear_time=264, stage_id=4) == 1
+    assert StarRating.calculate(clear_time=40, stage_id=1) == 3
+    assert StarRating.calculate(clear_time=60, stage_id=1) == 2
+    assert StarRating.calculate(clear_time=61, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=75, stage_id=2) == 3
+    assert StarRating.calculate(clear_time=113, stage_id=2) == 2
+    assert StarRating.calculate(clear_time=75, stage_id=3) == 3
+    assert StarRating.calculate(clear_time=113, stage_id=3) == 2
+    assert StarRating.calculate(clear_time=100, stage_id=4) == 3
+    assert StarRating.calculate(clear_time=150, stage_id=4) == 2
+    assert StarRating.calculate(clear_time=151, stage_id=4) == 1
 
 
 def test_timer_tracks_elapsed_time_with_injected_clock() -> None:
@@ -88,9 +94,7 @@ def test_resource_manager_registers_and_retrieves_images() -> None:
 
     resource_manager.register_image("player", image)
 
-    assert resource_manager.has_image("player")
     assert resource_manager.get_image("player") is image
-    assert not resource_manager.has_image("missing")
     assert resource_manager.get_image("missing") is None
 
 
@@ -98,12 +102,27 @@ def test_sound_manager_ignores_missing_cues_and_plays_registered_sound() -> None
     sound_manager = SoundManager()
     sound = FakeSound()
 
-    sound_manager.register_sound(SoundCue.MOVE, sound)
+    sound_manager.register_sound(SoundCue.MOVE_START, sound)
 
     assert sound_manager.play("missing") is False
-    assert sound_manager.play(SoundCue.MOVE) is True
+    assert sound_manager.play(SoundCue.MOVE_START) is True
     assert sound.play_count == 1
     assert sound.played_loops == [0]
+
+
+def test_sound_cues_match_runtime_actions() -> None:
+    assert not hasattr(SoundCue, "MOVE")
+    assert SoundCue.BIKE_COLLISION == "bike_collision"
+
+
+def test_default_sound_paths_include_bike_collision_sound() -> None:
+    assert DEFAULT_SOUND_PATHS[SoundCue.BIKE_COLLISION].name == "bike_collision.wav"
+
+
+def test_bike_collision_sound_volume_is_not_full_scale() -> None:
+    sound_path = DEFAULT_SOUND_PATHS[SoundCue.BIKE_COLLISION]
+
+    assert _sound_peak_ratio(sound_path) <= 0.5
 
 
 def test_sound_manager_keeps_playback_policy_simple() -> None:
@@ -163,3 +182,21 @@ class FakeChannel:
 
     def stop(self) -> None:
         self.stopped = True
+
+
+def _sound_peak_ratio(sound_path: Path) -> float:
+    with wave.open(str(sound_path), "rb") as sound_file:
+        sample_width = sound_file.getsampwidth()
+        frames = sound_file.readframes(sound_file.getnframes())
+    peak = max(abs(sample) for sample in _samples(frames, sample_width))
+    max_possible = 2 ** (8 * sample_width - 1)
+    return peak / max_possible
+
+
+def _samples(frames: bytes, sample_width: int) -> list[int]:
+    if sample_width != 2:
+        raise ValueError("only 16-bit wav files are supported")
+    return [
+        int.from_bytes(frames[index : index + 2], "little", signed=True)
+        for index in range(0, len(frames), 2)
+    ]

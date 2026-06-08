@@ -4,15 +4,22 @@ from kongoose.models import Direction, Position, TerrainType
 
 HOP_DURATION, HOP_SIZE_BONUS, HOP_HEIGHT = 0.18, 0.08, 0.22
 PLAYER_CELL_INSET = 0.25
+PLAYER_BOAT_WIDTH_SHRINK = 0.08
+PLAYER_BOAT_HEIGHT_SHRINK = 0.15
+PLAYER_BOAT_VERTICAL_LIFT = 0.14
 MIN_TILE_SIZE, PLAYING_HUD_HEIGHT = 24, 86
 TEXT_COLOR = (35, 45, 50)
 HUD_OVERLAY_COLOR = (246, 250, 244, 224)
 HUD_BORDER_COLOR = (182, 202, 185, 230)
 DEFAULT_BACKGROUND_COLOR = (242, 247, 241)
-BIKE_FRAME_COUNT = STUDENT_CROWD_FRAME_COUNT = 4
-STUDENT_CROWD_RUNNER_COUNT = 8
-STUDENT_CROWD_FRAME_DURATION, STUDENT_CROWD_TILE_DURATION = 0.12, 0.08
+BIKE_FRAME_COUNT = STUDENT_CROWD_WARNING_FRAME_COUNT = 4
+STUDENT_CROWD_ACTIVE_FRAME_COUNT = 12
+STUDENT_CROWD_FRAME_DURATION = 0.12
 TURTLE_IMAGE_NAMES = {Direction.LEFT: "turtle_left", Direction.RIGHT: "turtle_right"}
+BOAT_IMAGE_NAME = "boat_safe"
+BOAT_HULL_COLOR = (124, 81, 45)
+BOAT_OUTLINE_COLOR = (78, 53, 35)
+BOAT_DECK_COLOR = (220, 181, 112)
 TERRAIN_STYLES = {
     TerrainType.START: (176, 224, 166),
     TerrainType.LAND: (231, 222, 178),
@@ -20,6 +27,7 @@ TERRAIN_STYLES = {
     TerrainType.RIVER: (80, 155, 210),
     TerrainType.WALL: (92, 96, 105),
     TerrainType.GOAL: (245, 205, 92),
+    TerrainType.BOAT: (80, 155, 210),
 }
 PLAYER_COLOR = (240, 142, 74)
 BIKE_COLOR = (210, 66, 70)
@@ -89,7 +97,12 @@ class StageRenderer:
             )
         hop_start, _hop_end, hop_elapsed = hop_state or (None, None, 0.0)
         player_rect = self.player_draw_rect(
-            grid, cell_size, player.position, player.mounted_turtle, hop_state
+            grid,
+            cell_size,
+            player.position,
+            player.mounted_turtle,
+            hop_state,
+            terrain_map.get_terrain(player.position),
         )
         image = self.player_image(
             player.facing_direction, hop_elapsed, hop_start is not None
@@ -146,16 +159,52 @@ class StageRenderer:
                     TERRAIN_STYLES[terrain],
                     self.tile_points(grid, cell_size, position),
                 )
+                if terrain == TerrainType.BOAT:
+                    self.draw_boat_tile(surface, grid, cell_size, position)
                 if terrain == TerrainType.GOAL and (
                     goal_image := self.goal_image(stage_id)
                 ):
                     blit_scaled_centered(surface, goal_image, rect)
 
+    def draw_boat_tile(self, surface, grid, cell_size, position):
+        target = self.cell_rect(grid, cell_size, position).inflate(
+            -round(cell_size * 0.36),
+            -round(cell_size * 0.08),
+        )
+        if boat_image := self.boat_image():
+            blit_scaled_centered(surface, trim_transparent_margins(boat_image), target)
+            return
+        width, height = target.size
+        hull = [
+            (target.left + round(width * 0.16), target.centery),
+            (target.left + round(width * 0.28), target.bottom - round(height * 0.18)),
+            (target.right - round(width * 0.28), target.bottom - round(height * 0.18)),
+            (target.right - round(width * 0.16), target.centery),
+            (target.right - round(width * 0.32), target.top + round(height * 0.22)),
+            (target.left + round(width * 0.32), target.top + round(height * 0.22)),
+        ]
+        pygame.draw.polygon(surface, BOAT_HULL_COLOR, hull)
+        pygame.draw.lines(
+            surface,
+            BOAT_OUTLINE_COLOR,
+            True,
+            hull,
+            max(1, round(cell_size * 0.04)),
+        )
+        deck = pygame.Rect(
+            0,
+            0,
+            max(3, round(width * 0.42)),
+            max(2, round(height * 0.18)),
+        )
+        deck.center = (target.centerx, target.centery - round(height * 0.05))
+        pygame.draw.ellipse(surface, BOAT_DECK_COLOR, deck)
+
     def draw_student_crowds(self, surface, crowds, terrain, grid, cell_size):
         for crowd in crowds:
             if not 0 <= crowd.row < terrain.rows:
                 continue
-            if self._draw_student_crowd_runners(
+            if crowd.is_active() and self._draw_student_crowd_active(
                 surface, crowd, terrain, grid, cell_size
             ):
                 continue
@@ -185,36 +234,12 @@ class StageRenderer:
         blit_scaled_centered(surface, crowd_image, target)
         return True
 
-    def _draw_student_crowd_runners(self, surface, crowd, terrain, grid, cell_size):
-        runner_images = []
-        columns = min(max(1, crowd.columns), terrain.columns)
-        elapsed_time = crowd.elapsed_time - crowd.warning_time
-        if elapsed_time < 0.0:
+    def _draw_student_crowd_active(self, surface, crowd, terrain, grid, cell_size):
+        if (crowd_image := self.student_crowd_active_image(crowd)) is None:
             return False
-        motion = elapsed_time / STUDENT_CROWD_TILE_DURATION
-        whole_tiles, progress = int(motion), motion % 1
-        base_frame = int(elapsed_time / STUDENT_CROWD_FRAME_DURATION)
-        cutoff_motion = crowd.active_duration / STUDENT_CROWD_TILE_DURATION
-        cutoff_tiles, cutoff_progress = int(cutoff_motion), cutoff_motion % 1
-        min_tail_stream = (-1 if cutoff_progress > 0.0 else 0) - cutoff_tiles
-        first_column = -1 if progress > 0.0 else 0
-        for column in range(first_column, columns):
-            stream_index = column - whole_tiles
-            if elapsed_time >= crowd.active_duration and stream_index < min_tail_stream:
-                continue
-            runner_image = self.student_crowd_runner_image(stream_index, base_frame)
-            if runner_image is None:
-                return False
-            runner_images.append((column, trim_transparent_margins(runner_image)))
-        if not runner_images:
-            return False
-        for column, runner_image in runner_images:
-            cell = self.cell_rect(grid, cell_size, Position(crowd.row, column))
-            rect = self.move_rect_by_grid_progress(
-                cell, Direction.RIGHT, progress, cell_size
-            )
-            target = rect.inflate(-round(cell_size * 0.08), -round(cell_size * 0.04))
-            blit_scaled_centered(surface, runner_image, target)
+        first = self.cell_rect(grid, cell_size, Position(crowd.row, 0))
+        last = self.cell_rect(grid, cell_size, Position(crowd.row, terrain.columns - 1))
+        blit_scaled_centered(surface, crowd_image, first.union(last))
         return True
 
     def draw_position_sprites(self, surface, sprites, grid, cell_size, style, columns):
@@ -239,6 +264,7 @@ class StageRenderer:
         position,
         carried=None,
         hop_state=None,
+        terrain_type=None,
     ):
         hop_start, hop_end, hop_elapsed = hop_state or (None, None, 0.0)
         cell_rect = self.cell_rect(grid, cell_size, position)
@@ -246,9 +272,15 @@ class StageRenderer:
             -round(cell_rect.width * PLAYER_CELL_INSET),
             -round(cell_rect.height * PLAYER_CELL_INSET),
         )
-        if carried is not None:
-            return self.move_rect_by_sprite_progress(base_rect, carried, cell_size)
         if hop_start is None or hop_end is None:
+            if carried is not None:
+                return self.move_rect_by_sprite_progress(base_rect, carried, cell_size)
+            if terrain_type == TerrainType.BOAT:
+                base_rect = base_rect.inflate(
+                    -round(base_rect.width * PLAYER_BOAT_WIDTH_SHRINK),
+                    -round(base_rect.height * PLAYER_BOAT_HEIGHT_SHRINK),
+                )
+                base_rect.move_ip(0, -round(cell_size * PLAYER_BOAT_VERTICAL_LIFT))
             return base_rect
         progress = min(1.0, hop_elapsed / HOP_DURATION)
         arc = 4.0 * progress * (1.0 - progress)
@@ -272,19 +304,30 @@ class StageRenderer:
         return draw_rect
 
     def sprite_draw_rects(self, sprite, grid, cell_size: int, columns=None):
+        if self.is_crossing_map_edge(sprite, columns):
+            return []
         return [
             self.move_rect_by_sprite_progress(
-                self.cell_rect(grid, cell_size, position), sprite, cell_size, columns
+                self.cell_rect(grid, cell_size, sprite.position),
+                sprite,
+                cell_size,
+                columns,
             )
-            for position in sprite.get_positions()
         ]
+
+    def is_crossing_map_edge(self, sprite, columns) -> bool:
+        direction = getattr(sprite, "direction", "")
+        progress = getattr(sprite, "distance_progress", 0.0)
+        return (
+            columns is not None
+            and progress >= 0.5
+            and direction in SPRITE_PROGRESS_OFFSETS
+            and not 0 <= sprite.position.moved(direction).column < columns
+        )
 
     def move_rect_by_sprite_progress(self, rect, sprite, cell_size: int, columns=None):
         direction = getattr(sprite, "direction", "")
         progress = getattr(sprite, "distance_progress", 0.0)
-        if columns is not None and direction in SPRITE_PROGRESS_OFFSETS:
-            if not 0 <= sprite.position.moved(direction).column < columns:
-                progress = 0.0
         return self.move_rect_by_grid_progress(rect, direction, progress, cell_size)
 
     def move_rect_by_grid_progress(self, rect, direction, progress, cell_size):
@@ -322,17 +365,23 @@ class StageRenderer:
     def goal_image(self, stage_id):
         return self._get_asset_image(f"goal_stage_{stage_id}")
 
+    def boat_image(self):
+        return self._get_asset_image(BOAT_IMAGE_NAME)
+
     def student_crowd_warning_image(self, crowd):
         frame = (
             int(max(0.0, crowd.elapsed_time) / STUDENT_CROWD_FRAME_DURATION)
-            % STUDENT_CROWD_FRAME_COUNT
+            % STUDENT_CROWD_WARNING_FRAME_COUNT
         )
         return self._get_asset_image(f"student_crowd_warning_frame_{frame}")
 
-    def student_crowd_runner_image(self, stream_index, base_frame):
-        runner = stream_index % STUDENT_CROWD_RUNNER_COUNT
-        frame = (base_frame + stream_index) % STUDENT_CROWD_FRAME_COUNT
-        return self._get_asset_image(f"student_crowd_runner_{runner}_frame_{frame}")
+    def student_crowd_active_image(self, crowd):
+        elapsed = max(0.0, crowd.elapsed_time - crowd.warning_time)
+        frame = (
+            int(elapsed / STUDENT_CROWD_FRAME_DURATION)
+            % STUDENT_CROWD_ACTIVE_FRAME_COUNT
+        )
+        return self._get_asset_image(f"student_crowd_active_frame_{frame}")
 
     def cell_rect(self, grid, cell_size: int, position: Position):
         rect = pygame.Rect(0, 0, round(cell_size), round(cell_size / 2))

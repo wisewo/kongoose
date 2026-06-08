@@ -39,10 +39,12 @@ Use these documents when behavior, traceability, or domain meaning is unclear:
 
 ## Source Size Guardrail
 
-- Current runtime source size, excluding tests and data files, is 1,395 total
+- Current runtime source size, excluding tests and data files, is 1,466 total
   lines across the `kongoose/*.py` code files.
 - For each implementation change, re-check the runtime source line count
   excluding tests and data, and confirm it stays within 500-1,500 total lines.
+- Measure this count from the repository root with
+  `python scripts/count_source_lines.py`.
 - If the implementation would exceed that range, or looks likely to exceed it,
   tell the user before continuing so scope, simplification, or splitting can be
   discussed.
@@ -51,5 +53,8 @@ Use these documents when behavior, traceability, or domain meaning is unclear:
 
 - Prefer the existing design documents over inventing new behavior.
 - Keep each change scoped to one responsibility area.
+- Tests must follow the intended implementation behavior. Do not bend the
+  implementation direction merely to preserve existing tests; update tests when
+  the implementation is deliberately simplified or redesigned.
 - Update the relevant `doc/` file when design-level behavior changes.
 - Leave a short verification note after implementation work, especially for manual playtest results.

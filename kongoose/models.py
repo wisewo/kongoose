@@ -7,7 +7,15 @@ class Direction:
 
 
 class TerrainType:
-    LAND, RIVER, SAFE, WALL, START, GOAL = ".", "~", "-", "#", "S", "G"
+    LAND, RIVER, SAFE, WALL, START, GOAL, BOAT = (
+        ".",
+        "~",
+        "-",
+        "#",
+        "S",
+        "G",
+        "B",
+    )
 
 
 class FailureReason(Enum):
@@ -18,11 +26,12 @@ class FailureReason(Enum):
 
 
 class SoundCue:
-    MOVE_START, MOVE_SUCCESS, MOVE = "move_start", "move_success", "move"
+    MOVE_START, MOVE_SUCCESS = "move_start", "move_success"
     BLOCKED, TURTLE, BIKE_AMBIENCE = "blocked", "turtle", "bike_ambience"
     STUDENT_CROWD, WATER_AMBIENCE = "student_crowd", "water_ambience"
     LAKE_SPLASH, FAILURE_SCREEN = "lake_splash", "failure_screen"
     CLEAR_SCREEN, UI_SELECT = "clear_screen", "ui_select"
+    BIKE_COLLISION = "bike_collision"
     BACKGROUND_MUSIC = "background_music"
 
 

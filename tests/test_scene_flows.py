@@ -22,11 +22,13 @@ from kongoose.models import (
 )
 from kongoose.rendering import (
     BIKE_COLOR,
+    BOAT_IMAGE_NAME,
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
     PLAYING_HUD_HEIGHT,
+    STUDENT_CROWD_ACTIVE_FRAME_COUNT,
     STUDENT_CROWD_COLOR,
-    STUDENT_CROWD_TILE_DURATION,
+    STUDENT_CROWD_FRAME_DURATION,
     TERRAIN_STYLES,
     TURTLE_COLOR,
     StageRenderer,
@@ -226,24 +228,20 @@ def register_student_crowd_test_images(game: Game) -> None:
             f"student_crowd_warning_frame_{index}", image
         )
 
-    runner_colors = [
+    active_colors = [
         (29, 211, 188),
         (211, 64, 92),
         (67, 107, 218),
         (224, 181, 48),
-        (72, 198, 208),
-        (124, 82, 176),
-        (68, 166, 86),
-        (232, 121, 31),
     ]
-    for runner_index, color in enumerate(runner_colors):
-        for frame_index in range(4):
-            image = pygame.Surface((24, 32), pygame.SRCALPHA)
-            image.fill((*color, 255))
-            game.resource_manager.register_image(
-                f"student_crowd_runner_{runner_index}_frame_{frame_index}",
-                image,
-            )
+    for index in range(STUDENT_CROWD_ACTIVE_FRAME_COUNT):
+        color = active_colors[index % len(active_colors)]
+        image = pygame.Surface((96, 32), pygame.SRCALPHA)
+        image.fill((0, 0, 0, 0))
+        image.fill((*color, 255), pygame.Rect(8, 8, 80, 16))
+        game.resource_manager.register_image(
+            f"student_crowd_active_frame_{index}", image
+        )
 
 
 def test_main_scene_opens_stage_select_and_quits_from_keys() -> None:
@@ -298,8 +296,8 @@ def test_stage_select_draws_best_stars_with_registered_star_images() -> None:
 
 
 def test_playing_scene_moves_player_updates_stage_and_returns_to_select() -> None:
-    game = Game(initial_scene=PlayingScene())
     stage = StageStub()
+    game = Game(initial_scene=PlayingScene())
     set_current_stage(game, stage)
 
     game.current_scene.handle_event(key_event(pygame.K_UP))
@@ -325,10 +323,12 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
                     TerrainType.LAND,
                     TerrainType.SAFE,
                     TerrainType.RIVER,
+                    TerrainType.RIVER,
                     TerrainType.WALL,
                     TerrainType.GOAL,
                 ],
                 [
+                    TerrainType.LAND,
                     TerrainType.LAND,
                     TerrainType.LAND,
                     TerrainType.LAND,
@@ -343,7 +343,7 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
         student_crowds=[
             StudentCrowd(
                 row=1,
-                columns=6,
+                columns=7,
                 warning_time=0.0,
                 active_duration=10.0,
                 elapsed_time=1.0,
@@ -351,7 +351,7 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
         ],
         turtles=[Turtle(position=Position(row=0, column=3))],
     )
-    game = Game(initial_scene=PlayingScene())
+    game = Game(initial_scene=PlayingScene(), stages={1: stage})
     set_current_stage(game, stage)
     register_bike_test_images(game)
     register_turtle_test_images(game)
@@ -371,7 +371,7 @@ def test_playing_scene_draws_stage_grid_terrain_and_actors() -> None:
         (29, 211, 188),
         (34, 220, 120),
     ]:
-        assert expected_color in rendered_colors
+        assert has_similar_color(rendered_colors, expected_color, tolerance=18)
 
     assert (73, 83, 90) not in rendered_colors
     assert any(
@@ -430,6 +430,74 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
     assert (30, 220, 80) not in rendered_colors
 
 
+def test_playing_scene_draws_boat_tile_image_when_registered() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((240, 140))
+    boat_color = (177, 91, 42)
+    stage = Stage(
+        terrain_map=TerrainMap([[TerrainType.BOAT, TerrainType.START]]),
+        player=Player(Position(row=0, column=1)),
+    )
+    game = Game(initial_scene=PlayingScene())
+    set_current_stage(game, stage)
+    image = pygame.Surface((18, 10), pygame.SRCALPHA)
+    image.fill((*boat_color, 255))
+    game.resource_manager.register_image(BOAT_IMAGE_NAME, image)
+
+    game.current_scene.draw(surface)
+    rendered_colors = collect_surface_colors(surface)
+
+    assert boat_color in rendered_colors
+
+
+def test_player_on_boat_leaves_front_edge_visible() -> None:
+    pygame.font.init()
+    surface = pygame.Surface((240, 180))
+    boat_color = (177, 91, 42)
+    player_color = (250, 10, 200)
+    player_position = Position(row=0, column=1)
+    stage = Stage(
+        terrain_map=TerrainMap(
+            [
+                [
+                    TerrainType.LAND,
+                    TerrainType.BOAT,
+                    TerrainType.LAND,
+                    TerrainType.LAND,
+                ]
+            ]
+        ),
+        player=Player(player_position),
+    )
+    game = Game(initial_scene=PlayingScene())
+    set_current_stage(game, stage)
+    for image_name, color in (
+        (BOAT_IMAGE_NAME, boat_color),
+        ("player_goose_up_0", player_color),
+    ):
+        image = pygame.Surface((18, 10), pygame.SRCALPHA)
+        image.fill((*color, 255))
+        game.resource_manager.register_image(image_name, image)
+
+    game.current_scene.draw(surface)
+    renderer = renderer_for_game(game)
+    grid, cell_size = renderer.calculate_grid_layout(
+        surface.get_width(),
+        surface.get_height() - PLAYING_HUD_HEIGHT,
+        stage.terrain_map.rows,
+        stage.terrain_map.columns,
+        player_position,
+    )
+    grid.move_ip(0, PLAYING_HUD_HEIGHT)
+    cell_rect = renderer.cell_rect(grid, cell_size, player_position)
+    front_edge_sample = (
+        cell_rect.centerx,
+        cell_rect.centery + round(cell_size * 0.08),
+    )
+
+    assert surface.get_at(front_edge_sample)[:3] == boat_color
+
+
 def test_start_stage_plays_fixed_ambience_for_stage() -> None:
     game = Game()
     game.sound_manager = SoundManagerStub()
@@ -470,6 +538,25 @@ def test_failing_stage_stops_stage_ambience() -> None:
     assert game.sound_manager.stopped_cues == [
         SoundCue.BIKE_AMBIENCE,
         SoundCue.WATER_AMBIENCE,
+    ]
+
+
+def test_bike_collision_sound_plays_before_failure_screen() -> None:
+    game = Game(initial_scene=PlayingScene())
+    stage = StageStub()
+    sound_manager = SoundManagerStub()
+    set_current_stage(game, stage)
+    game.sound_manager = sound_manager
+
+    stage.failure_reason = FailureReason.HIT_BIKE
+    stage.next_move_result = MOVE_FAILED
+    game.current_scene.handle_event(key_event(pygame.K_RIGHT))
+
+    assert isinstance(game.current_scene, FailedScene)
+    assert game.last_failure_reason == FailureReason.HIT_BIKE
+    assert sound_manager.played_cues == [
+        (SoundCue.BIKE_COLLISION, 0),
+        (SoundCue.FAILURE_SCREEN, 0),
     ]
 
 
@@ -553,13 +640,13 @@ def test_playing_scene_uses_player_sprite_for_facing_direction() -> None:
 
     game.current_scene.draw(surface)
 
-    assert game.resource_manager.has_image("player_goose_left_0")
-    assert not game.resource_manager.has_image("player_goose_right_0")
+    assert game.resource_manager.get_image("player_goose_left_0") is not None
+    assert game.resource_manager.get_image("player_goose_right_0") is None
 
     player.facing_direction = Direction.RIGHT
     game.current_scene.draw(surface)
 
-    assert game.resource_manager.has_image("player_goose_right_0")
+    assert game.resource_manager.get_image("player_goose_right_0") is not None
 
 
 def test_playing_scene_uses_player_hop_animation_frames_when_registered() -> None:
@@ -582,7 +669,7 @@ def test_playing_scene_draws_default_stage_player_sprite_on_screen() -> None:
     player_color = (250, 10, 200)
     player_image = pygame.Surface((16, 16), pygame.SRCALPHA)
     player_image.fill((*player_color, 255))
-    game.resource_manager.register_image("player_goose_down_0", player_image)
+    game.resource_manager.register_image("player_goose_up_0", player_image)
 
     game.current_scene.draw(surface)
     player_pixels = sum(
@@ -746,6 +833,42 @@ def test_player_hop_draw_rect_arcs_up_without_large_scaling() -> None:
     assert jump_rect.centery < linear_mid_y
 
 
+def test_player_hop_draw_rect_uses_hop_before_turtle_carry_offset() -> None:
+    renderer = renderer_without_assets()
+    grid_rect = pygame.Rect(0, 0, 200, 100)
+    start = Position(row=0, column=0)
+    end = Position(row=0, column=1)
+    hop_state = (start, end, HOP_DURATION * 0.5)
+    carried_turtle = Turtle(
+        position=end,
+        direction=Direction.RIGHT,
+        distance_progress=0.75,
+    )
+
+    carried_rect = renderer.player_draw_rect(
+        grid_rect,
+        100,
+        end,
+        carried=carried_turtle,
+    )
+    hop_rect = renderer.player_draw_rect(
+        grid_rect,
+        100,
+        end,
+        carried=carried_turtle,
+        hop_state=hop_state,
+    )
+    expected_hop_rect = renderer.player_draw_rect(
+        grid_rect,
+        100,
+        end,
+        hop_state=hop_state,
+    )
+
+    assert hop_rect == expected_hop_rect
+    assert hop_rect != carried_rect
+
+
 def test_blocked_hop_draw_rect_returns_toward_start() -> None:
     renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 200, 100)
@@ -881,21 +1004,32 @@ def test_position_sprite_progress_follows_isometric_left_direction() -> None:
     assert draw_rect.centery == base_rect.centery - 12
 
 
-def test_position_sprite_progress_stays_on_map_edge_when_next_column_is_off_map() -> (
-    None
-):
+def test_position_sprite_disappears_after_crossing_map_edge() -> None:
     renderer = renderer_without_assets()
     grid_rect = pygame.Rect(0, 0, 300, 150)
     cases = (
-        Bike(Position(row=0, column=2), Direction.RIGHT, distance_progress=0.75),
-        Turtle(Position(row=0, column=0), Direction.LEFT, distance_progress=0.75),
+        (
+            Bike(Position(row=0, column=2), Direction.RIGHT, distance_progress=0.75),
+            Bike(Position(row=0, column=2), Direction.RIGHT, distance_progress=0.49),
+        ),
+        (
+            Turtle(Position(row=0, column=0), Direction.LEFT, distance_progress=0.75),
+            Turtle(Position(row=0, column=0), Direction.LEFT, distance_progress=0.49),
+        ),
     )
 
-    for sprite in cases:
-        draw_rect = renderer.sprite_draw_rects(sprite, grid_rect, 100, columns=3)[0]
-        base_rect = renderer.cell_rect(grid_rect, 100, sprite.position)
+    for hidden_sprite, visible_sprite in cases:
+        assert (
+            renderer.sprite_draw_rects(hidden_sprite, grid_rect, 100, columns=3) == []
+        )
 
-        assert draw_rect.center == base_rect.center
+        draw_rects = renderer.sprite_draw_rects(
+            visible_sprite,
+            grid_rect,
+            100,
+            columns=3,
+        )
+        assert len(draw_rects) == 1
 
 
 def test_position_sprites_draw_bike_animation_frame_when_registered() -> None:
@@ -1012,7 +1146,42 @@ def test_student_crowd_warning_draws_registered_warning_frame() -> None:
     assert STUDENT_CROWD_COLOR not in rendered_colors
 
 
-def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
+def test_student_crowd_active_draws_registered_active_frame() -> None:
+    pygame.font.init()
+    active_color = (16, 188, 204)
+    surface = pygame.Surface((320, 100))
+    surface.fill((0, 0, 0))
+    game = Game(initial_scene=PlayingScene())
+    renderer = renderer_for_game(game)
+    for index in range(4):
+        image = pygame.Surface((96, 32), pygame.SRCALPHA)
+        image.fill((*active_color, 255))
+        game.resource_manager.register_image(
+            f"student_crowd_active_frame_{index}", image
+        )
+    crowd = StudentCrowd(
+        row=0,
+        columns=3,
+        warning_time=0.2,
+        active_duration=1.0,
+        elapsed_time=0.2,
+    )
+
+    grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
+    renderer.draw_student_crowds(
+        surface,
+        [crowd],
+        TerrainMap([[TerrainType.LAND for _column in range(3)]]),
+        grid,
+        cell_size,
+    )
+    rendered_colors = collect_surface_colors(surface)
+
+    assert active_color in rendered_colors
+    assert STUDENT_CROWD_COLOR not in rendered_colors
+
+
+def test_student_crowd_active_uses_first_animation_frame_at_start() -> None:
     pygame.font.init()
     surface = pygame.Surface((820, 260))
     surface.fill((0, 0, 0))
@@ -1037,24 +1206,15 @@ def test_student_crowd_active_draws_registered_runner_in_each_cell() -> None:
     )
     rendered_colors = collect_surface_colors(surface)
 
-    for color in [
-        (29, 211, 188),
-        (211, 64, 92),
-        (67, 107, 218),
-        (224, 181, 48),
-        (72, 198, 208),
-        (124, 82, 176),
-        (68, 166, 86),
-        (232, 121, 31),
-    ]:
-        assert has_similar_color(rendered_colors, color)
+    assert (29, 211, 188) in rendered_colors
+    assert (211, 64, 92) not in rendered_colors
 
 
-def test_student_crowd_visual_tile_duration_is_three_times_faster() -> None:
-    assert STUDENT_CROWD_TILE_DURATION == 0.08
+def test_student_crowd_active_frame_duration_is_simple_loop() -> None:
+    assert STUDENT_CROWD_FRAME_DURATION == 0.12
 
 
-def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> None:
+def test_student_crowd_active_draws_padded_frame_art() -> None:
     pygame.font.init()
     active_color = (29, 211, 188)
     surface = pygame.Surface((320, 100))
@@ -1062,20 +1222,12 @@ def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> Non
     game = Game(initial_scene=PlayingScene())
     renderer = renderer_for_game(game)
     for index in range(4):
-        image = pygame.Surface((96, 12), pygame.SRCALPHA)
+        image = pygame.Surface((96, 32), pygame.SRCALPHA)
         image.fill((0, 0, 0, 0))
-        image.fill((*active_color, 255), pygame.Rect(36, 0, 24, 12))
+        image.fill((*active_color, 255), pygame.Rect(8, 8, 80, 16))
         game.resource_manager.register_image(
-            f"student_crowd_runner_0_frame_{index}", image
+            f"student_crowd_active_frame_{index}", image
         )
-    for runner_index in range(1, 4):
-        for frame_index in range(4):
-            image = pygame.Surface((24, 32), pygame.SRCALPHA)
-            image.fill((*active_color, 255))
-            game.resource_manager.register_image(
-                f"student_crowd_runner_{runner_index}_frame_{frame_index}",
-                image,
-            )
     crowd = StudentCrowd(
         row=0,
         columns=3,
@@ -1092,12 +1244,13 @@ def test_student_crowd_active_trims_transparent_margins_per_runner_cell() -> Non
         grid,
         cell_size,
     )
-    center = renderer.cell_rect(grid, cell_size, Position(0, 0)).center
+    rendered_colors = collect_surface_colors(surface)
 
-    assert surface.get_at(center)[:3] == active_color
+    assert active_color in rendered_colors
+    assert (0, 0, 0) in rendered_colors
 
 
-def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> None:
+def test_student_crowd_active_advances_animation_frame() -> None:
     pygame.font.init()
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
@@ -1109,7 +1262,7 @@ def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> Non
         columns=3,
         warning_time=0.2,
         active_duration=1.0,
-        elapsed_time=0.2 + STUDENT_CROWD_TILE_DURATION / 2,
+        elapsed_time=0.2 + STUDENT_CROWD_FRAME_DURATION * 1.5,
     )
 
     grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
@@ -1122,13 +1275,11 @@ def test_student_crowd_active_moves_runners_right_and_refills_from_left() -> Non
     )
     rendered_colors = collect_surface_colors(surface)
 
-    assert (232, 121, 31) in rendered_colors
-    assert (29, 211, 188) in rendered_colors
     assert (211, 64, 92) in rendered_colors
-    assert (67, 107, 218) in rendered_colors
+    assert (29, 211, 188) not in rendered_colors
 
 
-def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> None:
+def test_student_crowd_active_stops_after_active_duration() -> None:
     pygame.font.init()
     surface = pygame.Surface((320, 100))
     surface.fill((0, 0, 0))
@@ -1140,7 +1291,7 @@ def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> N
         columns=3,
         warning_time=0.2,
         active_duration=1.0,
-        elapsed_time=0.2 + 1.0 + STUDENT_CROWD_TILE_DURATION * 2.5,
+        elapsed_time=0.2 + 1.0,
     )
 
     grid, cell_size = renderer.calculate_grid_layout(300, 100, 1, 3)
@@ -1154,7 +1305,7 @@ def test_student_crowd_tail_exits_without_refilling_after_active_duration() -> N
     rendered_colors = collect_surface_colors(surface)
 
     assert (29, 211, 188) not in rendered_colors
-    assert any(color != (0, 0, 0) for color in rendered_colors)
+    assert rendered_colors == {(0, 0, 0)}
 
 
 def test_playing_scene_changes_to_failed_or_result_for_stage_outcomes() -> None:

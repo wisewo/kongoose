@@ -10,6 +10,7 @@
 - 게임 진행 화면의 2.5D 표현은 `PlayingScene.draw(surface)`에서 2D row/column 좌표를 얕은 등각 투영 화면 좌표로 변환해 표시하는 렌더링 책임이다. 이 표현은 `Stage`의 이동, 충돌, 실패, 클리어 판정 흐름을 바꾸지 않는다.
 - `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 강 칸은 `can_enter(position)`에서 막지 않는다.
 - `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다. 같은 판정 규칙은 플레이어 이동 직후와 `Stage.update(dt)` 직후에 모두 적용한다.
+- 자라 탑승과 하차 판정은 화면에 보이는 위치와 맞추기 위해 `Turtle.interaction_position()`을 사용한다. 자라 이동 진행률이 50% 미만이면 현재 칸, 50% 이상이면 다음 칸을 기준으로 한다.
 - `Goal` 클래스는 사용하지 않고 `TerrainType.GOAL`로 목적지를 표현한다.
 - 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생하며, 필요한 경우 볼륨을 함께 전달한다. Stage 2/3/4에 고정 매핑된 자전거/강물 환경음은 `loops=-1`로 반복 재생하고 스테이지 이탈 시 `SoundManager.stop(cue)`로 정지한다.
 - 게임 루프의 시간 흐름은 SSD의 Actor로 두지 않고, `Game.run()` 내부에서 현재 `Scene.update(dt)`와 `Scene.draw(surface)`가 반복되는 흐름으로 표현한다.
@@ -134,7 +135,6 @@ sequenceDiagram
     participant TerrainMap
     participant PlayerObj as Player
     participant Bike
-    participant BikeLane
     participant StudentCrowd
     participant Turtle
     participant Timer
@@ -166,7 +166,7 @@ sequenceDiagram
         TerrainMap-->>Stage: terrain_type
         Stage->>Bike: occupies(target_position)
         Stage->>StudentCrowd: occupies(target_position)
-        Stage->>Turtle: occupies(target_position)
+        Stage->>Turtle: interaction_position()
         Stage->>Stage: evaluate_player_state()
 
         alt 목적지 도착
@@ -186,6 +186,9 @@ sequenceDiagram
             Stage-->>PlayingScene: MoveResult(failed, failure_reason)
             opt 강/호수 추락
                 PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
+            end
+            opt 플레이어-자전거 충돌
+                PlayingScene->>SoundManager: play(SoundCue.BIKE_COLLISION)
             end
             PlayingScene->>Game: change_scene(FailedScene)
             Game->>FailedScene: enter(game)
@@ -210,7 +213,6 @@ sequenceDiagram
     loop Game.run() 내부 반복
         Game->>PlayingScene: update(dt)
         PlayingScene->>Stage: update(dt)
-        Stage->>BikeLane: update(dt)
         Stage->>Bike: update(dt)
         Stage->>StudentCrowd: update(dt)
         Stage->>Turtle: update(dt)
@@ -220,6 +222,9 @@ sequenceDiagram
         alt 실패 조건 발생
             opt 강/호수 추락
                 PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
+            end
+            opt 플레이어-자전거 충돌
+                PlayingScene->>SoundManager: play(SoundCue.BIKE_COLLISION)
             end
             PlayingScene->>Game: change_scene(FailedScene)
             Game->>FailedScene: enter(game)

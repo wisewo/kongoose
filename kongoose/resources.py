@@ -43,6 +43,3 @@ class ResourceManager:
 
     def get_image(self, name: str):
         return self.images.get(name)
-
-    def has_image(self, name: str) -> bool:
-        return name in self.images
