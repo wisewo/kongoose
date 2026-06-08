@@ -225,10 +225,13 @@ def test_default_stage_bikes_spawn_as_clustered_pairs_by_row() -> None:
                 if bike.position.row == bike_row
             )
 
-            assert _minimum_circular_gap(
-                row_columns,
-                stage.terrain_map.columns,
-            ) == 1
+            assert (
+                _minimum_circular_gap(
+                    row_columns,
+                    stage.terrain_map.columns,
+                )
+                == 1
+            )
 
 
 def test_consecutive_bike_row_clusters_are_staggered_by_band() -> None:
@@ -252,10 +255,13 @@ def test_consecutive_bike_row_clusters_are_staggered_by_band() -> None:
             ]
 
             for previous, current in zip(cluster_starts, cluster_starts[1:]):
-                assert _minimum_circular_gap(
-                    [previous, current],
-                    stage.terrain_map.columns,
-                ) >= 2
+                assert (
+                    _minimum_circular_gap(
+                        [previous, current],
+                        stage.terrain_map.columns,
+                    )
+                    >= 2
+                )
 
 
 def test_default_stage_bikes_keep_multiple_repeating_bikes_per_row() -> None:

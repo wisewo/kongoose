@@ -386,7 +386,9 @@ def test_initialize_randomizes_bike_start_columns_by_consecutive_row_band(
     monkeypatch,
 ) -> None:
     offsets = iter([2, 1])
-    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: next(offsets))
+    monkeypatch.setattr(
+        "kongoose.stage.random.randrange", lambda _columns: next(offsets)
+    )
     stage = Stage(
         terrain_map=TerrainMap(
             [
