@@ -25,6 +25,7 @@ from kongoose.rendering import (
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
     PLAYING_HUD_HEIGHT,
+    PLAYING_VIEW_ZOOM,
     STUDENT_CROWD_ACTIVE_FRAME_COUNT,
     STUDENT_CROWD_COLOR,
     STUDENT_CROWD_FRAME_DURATION,
@@ -397,18 +398,31 @@ def test_playing_scene_draws_diamond_tile_corners_as_background() -> None:
     surface = pygame.Surface((240, 180))
     game = Game(initial_scene=PlayingScene())
     stage = Stage(
-        terrain_map=TerrainMap([[TerrainType.LAND]]),
-        player=Player(Position(row=0, column=0)),
+        terrain_map=TerrainMap([[TerrainType.LAND, TerrainType.START]]),
+        player=Player(Position(row=0, column=1)),
     )
     set_current_stage(game, stage)
 
     game.current_scene.draw(surface)
-
-    assert surface.get_at((1, PLAYING_HUD_HEIGHT + 1))[:3] == DEFAULT_BACKGROUND_COLOR
-    assert (
-        surface.get_at((surface.get_width() // 2, PLAYING_HUD_HEIGHT + 2))[:3]
-        == TERRAIN_STYLES[TerrainType.LAND]
+    grid, cell_size = game.current_scene._renderer.calculate_grid_layout(
+        surface.get_width(),
+        max(1, surface.get_height() - PLAYING_HUD_HEIGHT),
+        stage.terrain_map.rows,
+        stage.terrain_map.columns,
+        stage.player.position,
     )
+    grid.move_ip(0, PLAYING_HUD_HEIGHT)
+    land_sample = game.current_scene._renderer.cell_rect(
+        grid,
+        cell_size,
+        Position(row=0, column=0),
+    ).center
+
+    assert (
+        surface.get_at((surface.get_width() - 1, PLAYING_HUD_HEIGHT + 1))[:3]
+        == DEFAULT_BACKGROUND_COLOR
+    )
+    assert surface.get_at(land_sample)[:3] == TERRAIN_STYLES[TerrainType.LAND]
 
 
 def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None:
@@ -818,14 +832,14 @@ def test_blocked_hop_draw_rect_returns_toward_start() -> None:
     assert late_rect.centerx < (base_rect.centerx + target_rect.centerx) // 2
 
 
-def test_playing_scene_grid_layout_keeps_tiles_close_like_2d_view() -> None:
+def test_playing_scene_grid_layout_applies_playing_view_zoom() -> None:
     renderer = renderer_without_assets()
 
     grid_rect, cell_size = renderer.calculate_grid_layout(
         960, 720, 24, 10, Position(row=23, column=5)
     )
 
-    assert cell_size == 96
+    assert cell_size == pytest.approx(96 * PLAYING_VIEW_ZOOM)
     assert grid_rect.width > 960
     assert grid_rect.height > 720
 
@@ -877,7 +891,7 @@ def test_playing_scene_isometric_layout_keeps_player_in_play_area() -> None:
         Position(row=23, column=5),
     )
 
-    assert cell_size == 80
+    assert cell_size == pytest.approx(80 * PLAYING_VIEW_ZOOM)
     assert grid_rect.width > 800
     assert grid_rect.height > 600
     assert 0 <= player_rect.centerx <= 800
