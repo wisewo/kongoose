@@ -142,20 +142,51 @@ class StageRenderer:
         return pygame.Rect(origin_x, top, grid_width, grid_height), cell_size
 
     def draw_terrain_grid(self, surface, terrain_map, grid, cell_size, stage_id=None):
+        goal_positions = []
         for row in range(terrain_map.rows):
             for column in range(terrain_map.columns):
                 position = Position(row=row, column=column)
                 terrain = terrain_map.get_terrain(position)
-                rect = self.cell_rect(grid, cell_size, position)
                 pygame.draw.polygon(
                     surface,
                     TERRAIN_STYLES[terrain],
                     self.tile_points(grid, cell_size, position),
                 )
-                if terrain == TerrainType.GOAL and (
-                    goal_image := self.goal_image(stage_id)
-                ):
-                    blit_scaled_centered(surface, goal_image, rect)
+                if terrain == TerrainType.GOAL:
+                    goal_positions.append(position)
+        self.draw_goal_images(surface, goal_positions, grid, cell_size, stage_id)
+
+    def draw_goal_images(self, surface, positions, grid, cell_size, stage_id):
+        if not positions:
+            return
+        if self.is_wide_goal_area(positions) and (
+            goal_image := self.goal_image(stage_id, wide=True)
+        ):
+            bleed = max(2, round(cell_size * 0.03))
+            blit_scaled_centered(
+                surface,
+                goal_image,
+                self.position_union_rect(positions, grid, cell_size).inflate(
+                    bleed, bleed
+                ),
+            )
+            return
+        if goal_image := self.goal_image(stage_id):
+            for position in positions:
+                blit_scaled_centered(
+                    surface, goal_image, self.cell_rect(grid, cell_size, position)
+                )
+
+    def is_wide_goal_area(self, positions):
+        rows = {position.row for position in positions}
+        columns = {position.column for position in positions}
+        return len(positions) == 6 and len(rows) == 2 and len(columns) == 3
+
+    def position_union_rect(self, positions, grid, cell_size):
+        rect = self.cell_rect(grid, cell_size, positions[0])
+        for position in positions[1:]:
+            rect.union_ip(self.cell_rect(grid, cell_size, position))
+        return rect
 
     def draw_student_crowds(self, surface, crowds, terrain, grid, cell_size):
         for crowd in crowds:
@@ -313,8 +344,9 @@ class StageRenderer:
         direction = getattr(turtle, "direction", Direction.RIGHT)
         return self._get_asset_image(TURTLE_IMAGE_NAMES.get(direction, "turtle_right"))
 
-    def goal_image(self, stage_id):
-        return self._get_asset_image(f"goal_stage_{stage_id}")
+    def goal_image(self, stage_id, wide=False):
+        suffix = "_3x2" if wide else ""
+        return self._get_asset_image(f"goal_stage_{stage_id}{suffix}")
 
     def student_crowd_warning_image(self, crowd):
         frame = (
