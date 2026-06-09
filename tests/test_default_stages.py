@@ -140,12 +140,6 @@ def test_default_stages_have_required_static_terrain() -> None:
         3: 162,
         4: 140,
     }
-    expected_boats = {
-        1: 0,
-        2: 0,
-        3: 0,
-        4: 0,
-    }
 
     for stage_id, stage in game.stages.items():
         terrains = [
@@ -157,7 +151,6 @@ def test_default_stages_have_required_static_terrain() -> None:
         assert terrains.count(TerrainType.GOAL) == 1
         assert terrains.count(TerrainType.WALL) in expected_walls[stage_id]
         assert terrains.count(_river_type()) == expected_rivers[stage_id]
-        assert terrains.count(TerrainType.BOAT) == expected_boats[stage_id]
 
 
 def test_default_stage_bikes_are_moderate_speed_and_avoid_wall_rows() -> None:
@@ -375,7 +368,6 @@ def test_default_stage_rivers_cross_map_and_late_stages_have_adjacent_bands() ->
 
             assert set(row_terrains) <= {
                 river,
-                TerrainType.BOAT,
                 TerrainType.START,
                 TerrainType.GOAL,
             }
@@ -540,14 +532,6 @@ def _row_terrains(stage: Stage, row: int) -> list[TerrainType]:
 
 def _turtle_rows(stage: Stage) -> set[int]:
     return {turtle.position.row for turtle in stage.turtles}
-
-
-def _boat_rows(stage: Stage) -> set[int]:
-    return {
-        row
-        for row in range(stage.terrain_map.rows)
-        if TerrainType.BOAT in _row_terrains(stage, row)
-    }
 
 
 def _consecutive_run_lengths(columns: list[int]) -> list[int]:

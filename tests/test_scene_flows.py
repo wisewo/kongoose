@@ -22,7 +22,6 @@ from kongoose.models import (
 )
 from kongoose.rendering import (
     BIKE_COLOR,
-    BOAT_IMAGE_NAME,
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
     PLAYING_HUD_HEIGHT,
@@ -428,74 +427,6 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
 
     assert (236, 45, 95) in rendered_colors
     assert (30, 220, 80) not in rendered_colors
-
-
-def test_playing_scene_draws_boat_tile_image_when_registered() -> None:
-    pygame.font.init()
-    surface = pygame.Surface((240, 140))
-    boat_color = (177, 91, 42)
-    stage = Stage(
-        terrain_map=TerrainMap([[TerrainType.BOAT, TerrainType.START]]),
-        player=Player(Position(row=0, column=1)),
-    )
-    game = Game(initial_scene=PlayingScene())
-    set_current_stage(game, stage)
-    image = pygame.Surface((18, 10), pygame.SRCALPHA)
-    image.fill((*boat_color, 255))
-    game.resource_manager.register_image(BOAT_IMAGE_NAME, image)
-
-    game.current_scene.draw(surface)
-    rendered_colors = collect_surface_colors(surface)
-
-    assert boat_color in rendered_colors
-
-
-def test_player_on_boat_leaves_front_edge_visible() -> None:
-    pygame.font.init()
-    surface = pygame.Surface((240, 180))
-    boat_color = (177, 91, 42)
-    player_color = (250, 10, 200)
-    player_position = Position(row=0, column=1)
-    stage = Stage(
-        terrain_map=TerrainMap(
-            [
-                [
-                    TerrainType.LAND,
-                    TerrainType.BOAT,
-                    TerrainType.LAND,
-                    TerrainType.LAND,
-                ]
-            ]
-        ),
-        player=Player(player_position),
-    )
-    game = Game(initial_scene=PlayingScene())
-    set_current_stage(game, stage)
-    for image_name, color in (
-        (BOAT_IMAGE_NAME, boat_color),
-        ("player_goose_up_0", player_color),
-    ):
-        image = pygame.Surface((18, 10), pygame.SRCALPHA)
-        image.fill((*color, 255))
-        game.resource_manager.register_image(image_name, image)
-
-    game.current_scene.draw(surface)
-    renderer = renderer_for_game(game)
-    grid, cell_size = renderer.calculate_grid_layout(
-        surface.get_width(),
-        surface.get_height() - PLAYING_HUD_HEIGHT,
-        stage.terrain_map.rows,
-        stage.terrain_map.columns,
-        player_position,
-    )
-    grid.move_ip(0, PLAYING_HUD_HEIGHT)
-    cell_rect = renderer.cell_rect(grid, cell_size, player_position)
-    front_edge_sample = (
-        cell_rect.centerx,
-        cell_rect.centery + round(cell_size * 0.08),
-    )
-
-    assert surface.get_at(front_edge_sample)[:3] == boat_color
 
 
 def test_start_stage_plays_fixed_ambience_for_stage() -> None:

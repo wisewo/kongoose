@@ -7,14 +7,13 @@ class Direction:
 
 
 class TerrainType:
-    LAND, RIVER, SAFE, WALL, START, GOAL, BOAT = (
+    LAND, RIVER, SAFE, WALL, START, GOAL = (
         ".",
         "~",
         "-",
         "#",
         "S",
         "G",
-        "B",
     )
 
 

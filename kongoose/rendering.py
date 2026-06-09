@@ -4,9 +4,6 @@ from kongoose.models import Direction, Position, TerrainType
 
 HOP_DURATION, HOP_SIZE_BONUS, HOP_HEIGHT = 0.18, 0.08, 0.22
 PLAYER_CELL_INSET = 0.25
-PLAYER_BOAT_WIDTH_SHRINK = 0.08
-PLAYER_BOAT_HEIGHT_SHRINK = 0.15
-PLAYER_BOAT_VERTICAL_LIFT = 0.14
 MIN_TILE_SIZE, PLAYING_HUD_HEIGHT = 24, 86
 TEXT_COLOR = (35, 45, 50)
 HUD_OVERLAY_COLOR = (246, 250, 244, 224)
@@ -16,10 +13,6 @@ BIKE_FRAME_COUNT = STUDENT_CROWD_WARNING_FRAME_COUNT = 4
 STUDENT_CROWD_ACTIVE_FRAME_COUNT = 12
 STUDENT_CROWD_FRAME_DURATION = 0.12
 TURTLE_IMAGE_NAMES = {Direction.LEFT: "turtle_left", Direction.RIGHT: "turtle_right"}
-BOAT_IMAGE_NAME = "boat_safe"
-BOAT_HULL_COLOR = (124, 81, 45)
-BOAT_OUTLINE_COLOR = (78, 53, 35)
-BOAT_DECK_COLOR = (220, 181, 112)
 TERRAIN_STYLES = {
     TerrainType.START: (176, 224, 166),
     TerrainType.LAND: (231, 222, 178),
@@ -27,7 +20,6 @@ TERRAIN_STYLES = {
     TerrainType.RIVER: (80, 155, 210),
     TerrainType.WALL: (92, 96, 105),
     TerrainType.GOAL: (245, 205, 92),
-    TerrainType.BOAT: (80, 155, 210),
 }
 PLAYER_COLOR = (240, 142, 74)
 BIKE_COLOR = (210, 66, 70)
@@ -159,46 +151,10 @@ class StageRenderer:
                     TERRAIN_STYLES[terrain],
                     self.tile_points(grid, cell_size, position),
                 )
-                if terrain == TerrainType.BOAT:
-                    self.draw_boat_tile(surface, grid, cell_size, position)
                 if terrain == TerrainType.GOAL and (
                     goal_image := self.goal_image(stage_id)
                 ):
                     blit_scaled_centered(surface, goal_image, rect)
-
-    def draw_boat_tile(self, surface, grid, cell_size, position):
-        target = self.cell_rect(grid, cell_size, position).inflate(
-            -round(cell_size * 0.36),
-            -round(cell_size * 0.08),
-        )
-        if boat_image := self.boat_image():
-            blit_scaled_centered(surface, trim_transparent_margins(boat_image), target)
-            return
-        width, height = target.size
-        hull = [
-            (target.left + round(width * 0.16), target.centery),
-            (target.left + round(width * 0.28), target.bottom - round(height * 0.18)),
-            (target.right - round(width * 0.28), target.bottom - round(height * 0.18)),
-            (target.right - round(width * 0.16), target.centery),
-            (target.right - round(width * 0.32), target.top + round(height * 0.22)),
-            (target.left + round(width * 0.32), target.top + round(height * 0.22)),
-        ]
-        pygame.draw.polygon(surface, BOAT_HULL_COLOR, hull)
-        pygame.draw.lines(
-            surface,
-            BOAT_OUTLINE_COLOR,
-            True,
-            hull,
-            max(1, round(cell_size * 0.04)),
-        )
-        deck = pygame.Rect(
-            0,
-            0,
-            max(3, round(width * 0.42)),
-            max(2, round(height * 0.18)),
-        )
-        deck.center = (target.centerx, target.centery - round(height * 0.05))
-        pygame.draw.ellipse(surface, BOAT_DECK_COLOR, deck)
 
     def draw_student_crowds(self, surface, crowds, terrain, grid, cell_size):
         for crowd in crowds:
@@ -275,12 +231,6 @@ class StageRenderer:
         if hop_start is None or hop_end is None:
             if carried is not None:
                 return self.move_rect_by_sprite_progress(base_rect, carried, cell_size)
-            if terrain_type == TerrainType.BOAT:
-                base_rect = base_rect.inflate(
-                    -round(base_rect.width * PLAYER_BOAT_WIDTH_SHRINK),
-                    -round(base_rect.height * PLAYER_BOAT_HEIGHT_SHRINK),
-                )
-                base_rect.move_ip(0, -round(cell_size * PLAYER_BOAT_VERTICAL_LIFT))
             return base_rect
         progress = min(1.0, hop_elapsed / HOP_DURATION)
         arc = 4.0 * progress * (1.0 - progress)
@@ -364,9 +314,6 @@ class StageRenderer:
 
     def goal_image(self, stage_id):
         return self._get_asset_image(f"goal_stage_{stage_id}")
-
-    def boat_image(self):
-        return self._get_asset_image(BOAT_IMAGE_NAME)
 
     def student_crowd_warning_image(self, crowd):
         frame = (

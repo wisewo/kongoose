@@ -47,7 +47,7 @@ def test_terrain_map_allows_river_but_blocks_walls_and_out_of_bounds() -> None:
     terrain_map = TerrainMap(
         [
             [TerrainType.START, TerrainType.LAND, TerrainType.WALL],
-            [TerrainType.RIVER, TerrainType.SAFE, TerrainType.BOAT],
+            [TerrainType.RIVER, TerrainType.SAFE, TerrainType.LAND],
         ]
     )
 
@@ -78,6 +78,17 @@ def test_result_constants_are_plain_strings() -> None:
     assert MOVE_FAILED == "failed"
     assert UPDATE_SAFE == "safe"
     assert UPDATE_FAILED == "failed"
+
+
+def test_terrain_types_match_fixed_stage_tiles() -> None:
+    assert (
+        TerrainType.LAND,
+        TerrainType.RIVER,
+        TerrainType.SAFE,
+        TerrainType.WALL,
+        TerrainType.START,
+        TerrainType.GOAL,
+    ) == (".", "~", "-", "#", "S", "G")
 
 
 def test_game_changes_scene_and_calls_enter() -> None:
@@ -174,23 +185,6 @@ def test_stage_reports_river_failure_without_turtle() -> None:
 
     assert result == MOVE_FAILED
     assert stage.failure_reason == FailureReason.FELL_IN_RIVER
-    assert stage.player.position == Position(row=0, column=1)
-
-
-def test_stage_treats_boat_as_safe_rest_tile() -> None:
-    stage = Stage(
-        terrain_map=TerrainMap(
-            [
-                [TerrainType.START, TerrainType.BOAT],
-            ]
-        ),
-        player=Player(Position(row=0, column=0)),
-    )
-
-    result = stage.move_player(Direction.RIGHT)
-
-    assert result == MOVE_MOVED
-    assert stage.failure_reason is None
     assert stage.player.position == Position(row=0, column=1)
 
 
