@@ -5,6 +5,7 @@ from kongoose.models import Direction, Position, TerrainType
 HOP_DURATION, HOP_SIZE_BONUS, HOP_HEIGHT = 0.18, 0.08, 0.22
 PLAYER_CELL_INSET = 0.25
 MIN_TILE_SIZE, PLAYING_HUD_HEIGHT = 24, 86
+PLAYING_VIEW_ZOOM = 1.3
 TEXT_COLOR = (35, 45, 50)
 HUD_OVERLAY_COLOR = (246, 250, 244, 224)
 HUD_BORDER_COLOR = (182, 202, 185, 230)
@@ -125,7 +126,7 @@ class StageRenderer:
 
     def calculate_grid_layout(self, width, height, rows, columns, focus=None):
         columns = max(1, columns)
-        cell_size = max(MIN_TILE_SIZE, width / columns)
+        cell_size = max(MIN_TILE_SIZE, width / columns * PLAYING_VIEW_ZOOM)
         grid_width = round((rows + columns) * cell_size / 2)
         grid_height = round((rows + columns) * cell_size / 4)
         origin_x = round((width - grid_width) / 2 + rows * cell_size / 2)
