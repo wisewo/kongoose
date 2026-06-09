@@ -42,10 +42,10 @@ def test_default_stages_match_documented_balance_shape() -> None:
     game = Game()
 
     expected_shapes = {
-        1: (21, 7),
-        2: (35, 8),
-        3: (35, 9),
-        4: (43, 10),
+        1: (22, 7),
+        2: (36, 8),
+        3: (36, 9),
+        4: (44, 10),
     }
 
     for stage_id, (rows, columns) in expected_shapes.items():
@@ -59,19 +59,35 @@ def test_default_stages_place_start_and_goal_on_documented_tiles() -> None:
     game = Game()
 
     expected_tiles = {
-        1: (_position(20, 3), _position(0, 3)),
-        2: (_position(34, 4), _position(0, 4)),
-        3: (_position(34, 4), _position(0, 4)),
-        4: (_position(42, 5), _position(0, 5)),
+        1: (
+            _position(21, 3),
+            [(row, column) for row in range(2) for column in range(2, 5)],
+        ),
+        2: (
+            _position(35, 4),
+            [(row, column) for row in range(2) for column in range(3, 6)],
+        ),
+        3: (
+            _position(35, 4),
+            [(row, column) for row in range(2) for column in range(3, 6)],
+        ),
+        4: (
+            _position(43, 5),
+            [(row, column) for row in range(2) for column in range(4, 7)],
+        ),
     }
 
     for stage_id, stage in game.stages.items():
         terrain_map = stage.terrain_map
-        start_position, goal_position = expected_tiles[stage_id]
+        start_position, goal_positions = expected_tiles[stage_id]
 
         assert stage.player.position == start_position
         assert terrain_map.get_terrain(start_position) == TerrainType.START
-        assert terrain_map.get_terrain(goal_position) == TerrainType.GOAL
+        assert [
+            (position.row, position.column)
+            for position in _all_positions(terrain_map)
+            if terrain_map.get_terrain(position) == TerrainType.GOAL
+        ] == goal_positions
 
 
 def test_default_stages_match_documented_object_counts() -> None:
@@ -148,7 +164,7 @@ def test_default_stages_have_required_static_terrain() -> None:
         ]
 
         assert terrains.count(TerrainType.START) == 1
-        assert terrains.count(TerrainType.GOAL) == 1
+        assert terrains.count(TerrainType.GOAL) == 6
         assert terrains.count(TerrainType.WALL) in expected_walls[stage_id]
         assert terrains.count(_river_type()) == expected_rivers[stage_id]
 
@@ -329,7 +345,7 @@ def test_consecutive_bike_row_bands_use_one_lower_speed_per_band() -> None:
 
 def test_stage_2_adjacent_bike_rows_are_slower() -> None:
     stage = Game().stages[2]
-    adjacent_rows = {13, 14, 15}
+    adjacent_rows = {14, 15, 16}
     adjacent_bikes = [
         bike for bike in stage.bikes if bike.position.row in adjacent_rows
     ]
@@ -337,7 +353,7 @@ def test_stage_2_adjacent_bike_rows_are_slower() -> None:
     assert len(adjacent_bikes) == 6
     assert {bike.speed for bike in adjacent_bikes} == {3.0}
 
-    two_row_band_rows = {9, 10, 23, 24}
+    two_row_band_rows = {10, 11, 24, 25}
     two_row_band_bikes = [
         bike for bike in stage.bikes if bike.position.row in two_row_band_rows
     ]
@@ -382,10 +398,10 @@ def test_stage_2_is_land_only_obstacle_and_bike_map() -> None:
 
     assert (
         _row_terrains(stage, 0)
-        == [TerrainType.LAND] * 4 + [TerrainType.GOAL] + [TerrainType.LAND] * 3
+        == [TerrainType.LAND] * 3 + [TerrainType.GOAL] * 3 + [TerrainType.LAND] * 2
     )
     assert (
-        _row_terrains(stage, 34)
+        _row_terrains(stage, 35)
         == [TerrainType.LAND] * 4 + [TerrainType.START] + [TerrainType.LAND] * 3
     )
     assert len(_turtle_rows(stage)) == 0
@@ -401,12 +417,12 @@ def test_stage_3_uses_varied_river_band_lengths_and_land_start() -> None:
     stage = game.stages[3]
 
     assert (
-        _row_terrains(stage, 34)
+        _row_terrains(stage, 35)
         == [TerrainType.LAND] * 4 + [TerrainType.START] + [TerrainType.LAND] * 4
     )
     assert (
         _row_terrains(stage, 0)
-        == [TerrainType.LAND] * 4 + [TerrainType.GOAL] + [TerrainType.LAND] * 4
+        == [TerrainType.LAND] * 3 + [TerrainType.GOAL] * 3 + [TerrainType.LAND] * 3
     )
 
     river_band_lengths = _river_run_lengths(stage)
