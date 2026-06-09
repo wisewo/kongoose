@@ -39,7 +39,7 @@ Use these documents when behavior, traceability, or domain meaning is unclear:
 
 ## Source Size Guardrail
 
-- Current runtime source size, excluding tests and data files, is 1,466 total
+- Current runtime source size, excluding tests and data files, is 1,412 total
   lines across the `kongoose/*.py` code files.
 - For each implementation change, re-check the runtime source line count
   excluding tests and data, and confirm it stays within 500-1,500 total lines.
