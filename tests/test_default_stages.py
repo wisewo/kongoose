@@ -382,9 +382,7 @@ def test_stage_2_is_land_only_obstacle_and_bike_map() -> None:
 
     assert (
         _row_terrains(stage, 0)
-        == [TerrainType.LAND] * 3
-        + [TerrainType.GOAL] * 3
-        + [TerrainType.LAND] * 2
+        == [TerrainType.LAND] * 3 + [TerrainType.GOAL] * 3 + [TerrainType.LAND] * 2
     )
     assert (
         _row_terrains(stage, 35)
@@ -408,9 +406,7 @@ def test_stage_3_uses_varied_river_band_lengths_and_land_start() -> None:
     )
     assert (
         _row_terrains(stage, 0)
-        == [TerrainType.LAND] * 3
-        + [TerrainType.GOAL] * 3
-        + [TerrainType.LAND] * 3
+        == [TerrainType.LAND] * 3 + [TerrainType.GOAL] * 3 + [TerrainType.LAND] * 3
     )
 
     river_band_lengths = _river_run_lengths(stage)
