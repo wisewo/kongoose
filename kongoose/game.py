@@ -17,6 +17,7 @@ DEFAULT_SOUND_PATHS = {
         (SoundCue.BLOCKED, "blocked_obstacle.wav"),
         (SoundCue.TURTLE, "turtle_ride.wav"),
         (SoundCue.BIKE_AMBIENCE, "bike_ambience_loop.wav"),
+        (SoundCue.BIKE_COLLISION, "bike_collision.wav"),
         (SoundCue.STUDENT_CROWD, "student_crowd.wav"),
         (SoundCue.WATER_AMBIENCE, "running_water.mp3"),
         (SoundCue.LAKE_SPLASH, "lake_game_over.wav"),
@@ -165,6 +166,8 @@ class Game:
         reason = self.current_stage.failure_reason
         if reason == models.FailureReason.FELL_IN_RIVER:
             self.sound_manager.play(SoundCue.LAKE_SPLASH)
+        if reason == models.FailureReason.HIT_BIKE:
+            self.sound_manager.play(SoundCue.BIKE_COLLISION)
         self.fail_current_stage(reason)
 
     def _handle_move_result(self, result: str | None) -> None:

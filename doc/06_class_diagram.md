@@ -12,6 +12,7 @@
 - `PlayingScene`은 게임 진행 화면을 그릴 때 2D row/column 격자 좌표를 얕은 등각 투영 화면 좌표로 변환한다. 이 변환은 렌더링 전용이며 `Stage`, `TerrainMap`, `Position`의 판정 규칙을 바꾸지 않는다.
 - `TerrainMap`은 파일에서 읽은 row x column 구조의 정적 지형 레이어를 관리한다. `can_enter(position)`은 맵 범위와 벽 같은 정적 진입 불가 지형만 판단하며 강 칸은 막지 않는다.
 - `Stage`는 `TerrainMap`과 동적 객체를 조합해 이동, 갱신, 충돌, 실패, 클리어를 판정한다. `evaluate_player_state()`는 플레이어 이동 직후와 동적 객체 갱신 직후에 같은 규칙으로 호출된다.
+- `Turtle`은 화면에 보이는 이동 진행률과 판정을 맞추기 위해 `distance_progress`가 50% 미만이면 현재 칸, 50% 이상이면 다음 칸을 상호작용 위치로 제공한다. `Stage`는 자라 탑승, 자라 간 이동, LAND 하차의 입력/판정에는 이 위치를 쓰되, 탑승 중 `Player.position`은 렌더링 오프셋이 중복 적용되지 않도록 자라의 실제 격자 칸으로 유지한다.
 - `Position`은 row, column을 가진 위치 값 객체이며 원시 tuple 대신 사용한다.
 - `GameSprite`는 위치를 가지고 갱신되거나 점유 판정이 필요한 스테이지 객체의 공통 추상 클래스이다.
 - 목적지는 별도 `Goal` 클래스로 두지 않고 `TerrainType.GOAL`로 표현한다.
@@ -99,7 +100,6 @@ classDiagram
         -terrain_map
         -player
         -bikes
-        -bike_lanes
         -student_crowds
         -turtles
         +initialize()
@@ -142,7 +142,7 @@ classDiagram
 
     class GameSprite {
         <<abstract>>
-        -positions
+        -position
         +update(dt)
         +occupies(position)
     }
@@ -158,17 +158,6 @@ classDiagram
         -direction
     }
 
-    class BikeLane {
-        -row
-        -direction
-        -speed
-        -spawn_gap
-        -initial_offset
-        -max_active
-        +reset()
-        +update(dt)
-    }
-
     class StudentCrowd {
         -speed
         -direction
@@ -181,6 +170,7 @@ classDiagram
     class Turtle {
         -speed
         -direction
+        +interaction_position()
     }
 
     class Timer {
@@ -274,6 +264,7 @@ classDiagram
         BLOCKED
         TURTLE
         BIKE_AMBIENCE
+        BIKE_COLLISION
         STUDENT_CROWD
         WATER_AMBIENCE
         LAKE_SPLASH
@@ -286,7 +277,6 @@ classDiagram
     class ResourceManager {
         +load()
         +get_image(name)
-        +has_image(name)
     }
 
     Game --> Scene : current_scene
@@ -311,7 +301,6 @@ classDiagram
     Stage --> TerrainMap
     Stage --> Player
     Stage --> Bike
-    Stage --> BikeLane
     Stage --> StudentCrowd
     Stage --> Turtle
     Stage ..> MoveResult
@@ -323,7 +312,7 @@ classDiagram
     TerrainMap --> TerrainType
     TerrainMap ..> Position
     Position ..> Direction
-    GameSprite --> Position : positions
+    GameSprite --> Position : position
     GameSprite <|-- Player
     GameSprite <|-- Bike
     GameSprite <|-- StudentCrowd
@@ -352,10 +341,9 @@ classDiagram
 | Direction | 플레이어와 동적 객체의 이동 방향 표현 |
 | GameSprite | 위치 점유와 시간 갱신이 필요한 스테이지 객체의 공통 추상화 |
 | Player | 건구스의 현재 위치, 이동, 자라 탑승 상태 관리 |
-| Bike | 육지 구간을 이동하는 자전거 장애물 |
-| BikeLane | 자전거 행별 방향, 속도, 스폰 간격, 시작 오프셋, 최대 동시 등장 수 관리 |
+| Bike | 육지 구간을 이동하는 자전거 장애물. 같은 행에 미리 배치되어 화면 끝에서 반대편으로 순환한다 |
 | StudentCrowd | 경고 후 등장하는 한 줄 특수 장애물 |
-| Turtle | 강 구간 이동 발판 |
+| Turtle | 강 구간 이동 발판. 이동 진행률 50% 기준으로 현재 칸 또는 다음 칸을 상호작용 위치로 제공 |
 | Timer | 스테이지별 경과 시간 측정 |
 | StarRating | 클리어 시간 기반 별점 계산 |
 | MoveResult | 플레이어 이동 결과와 이동 직후 실패 원인 전달 |
@@ -376,7 +364,7 @@ classDiagram
 | FR-01, FR-02 | Game, Scene |
 | FR-03, FR-04, FR-14 | StageSelectScene, Stage, Progress, SaveManager |
 | FR-05, FR-06 | PlayingScene, Stage, Player, Position, Direction, TerrainMap |
-| FR-07, FR-08, FR-09 | GameSprite, Bike, BikeLane, StudentCrowd, Stage, StageUpdateResult, FailureReason, SoundManager |
+| FR-07, FR-08, FR-09 | GameSprite, Bike, StudentCrowd, Stage, StageUpdateResult, FailureReason, SoundManager |
 | FR-10, FR-11, FR-12 | GameSprite, Turtle, Stage, StageUpdateResult, FailureReason, Player, TerrainMap |
 | FR-13, FR-15 | Game, FailedScene, ResultScene, Stage |
 | FR-16, FR-17, FR-18 | PlayingScene, ResultScene, TerrainMap, TerrainType, Timer, StarRating, Stage |

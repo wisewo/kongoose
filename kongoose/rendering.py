@@ -9,9 +9,9 @@ TEXT_COLOR = (35, 45, 50)
 HUD_OVERLAY_COLOR = (246, 250, 244, 224)
 HUD_BORDER_COLOR = (182, 202, 185, 230)
 DEFAULT_BACKGROUND_COLOR = (242, 247, 241)
-BIKE_FRAME_COUNT = STUDENT_CROWD_FRAME_COUNT = 4
-STUDENT_CROWD_RUNNER_COUNT = 8
-STUDENT_CROWD_FRAME_DURATION, STUDENT_CROWD_TILE_DURATION = 0.12, 0.08
+BIKE_FRAME_COUNT = STUDENT_CROWD_WARNING_FRAME_COUNT = 4
+STUDENT_CROWD_ACTIVE_FRAME_COUNT = 12
+STUDENT_CROWD_FRAME_DURATION = 0.12
 TURTLE_IMAGE_NAMES = {Direction.LEFT: "turtle_left", Direction.RIGHT: "turtle_right"}
 TERRAIN_STYLES = {
     TerrainType.START: (176, 224, 166),
@@ -89,7 +89,12 @@ class StageRenderer:
             )
         hop_start, _hop_end, hop_elapsed = hop_state or (None, None, 0.0)
         player_rect = self.player_draw_rect(
-            grid, cell_size, player.position, player.mounted_turtle, hop_state
+            grid,
+            cell_size,
+            player.position,
+            player.mounted_turtle,
+            hop_state,
+            terrain_map.get_terrain(player.position),
         )
         image = self.player_image(
             player.facing_direction, hop_elapsed, hop_start is not None
@@ -155,7 +160,7 @@ class StageRenderer:
         for crowd in crowds:
             if not 0 <= crowd.row < terrain.rows:
                 continue
-            if self._draw_student_crowd_runners(
+            if crowd.is_active() and self._draw_student_crowd_active(
                 surface, crowd, terrain, grid, cell_size
             ):
                 continue
@@ -185,36 +190,12 @@ class StageRenderer:
         blit_scaled_centered(surface, crowd_image, target)
         return True
 
-    def _draw_student_crowd_runners(self, surface, crowd, terrain, grid, cell_size):
-        runner_images = []
-        columns = min(max(1, crowd.columns), terrain.columns)
-        elapsed_time = crowd.elapsed_time - crowd.warning_time
-        if elapsed_time < 0.0:
+    def _draw_student_crowd_active(self, surface, crowd, terrain, grid, cell_size):
+        if (crowd_image := self.student_crowd_active_image(crowd)) is None:
             return False
-        motion = elapsed_time / STUDENT_CROWD_TILE_DURATION
-        whole_tiles, progress = int(motion), motion % 1
-        base_frame = int(elapsed_time / STUDENT_CROWD_FRAME_DURATION)
-        cutoff_motion = crowd.active_duration / STUDENT_CROWD_TILE_DURATION
-        cutoff_tiles, cutoff_progress = int(cutoff_motion), cutoff_motion % 1
-        min_tail_stream = (-1 if cutoff_progress > 0.0 else 0) - cutoff_tiles
-        first_column = -1 if progress > 0.0 else 0
-        for column in range(first_column, columns):
-            stream_index = column - whole_tiles
-            if elapsed_time >= crowd.active_duration and stream_index < min_tail_stream:
-                continue
-            runner_image = self.student_crowd_runner_image(stream_index, base_frame)
-            if runner_image is None:
-                return False
-            runner_images.append((column, trim_transparent_margins(runner_image)))
-        if not runner_images:
-            return False
-        for column, runner_image in runner_images:
-            cell = self.cell_rect(grid, cell_size, Position(crowd.row, column))
-            rect = self.move_rect_by_grid_progress(
-                cell, Direction.RIGHT, progress, cell_size
-            )
-            target = rect.inflate(-round(cell_size * 0.08), -round(cell_size * 0.04))
-            blit_scaled_centered(surface, runner_image, target)
+        first = self.cell_rect(grid, cell_size, Position(crowd.row, 0))
+        last = self.cell_rect(grid, cell_size, Position(crowd.row, terrain.columns - 1))
+        blit_scaled_centered(surface, crowd_image, first.union(last))
         return True
 
     def draw_position_sprites(self, surface, sprites, grid, cell_size, style, columns):
@@ -239,6 +220,7 @@ class StageRenderer:
         position,
         carried=None,
         hop_state=None,
+        terrain_type=None,
     ):
         hop_start, hop_end, hop_elapsed = hop_state or (None, None, 0.0)
         cell_rect = self.cell_rect(grid, cell_size, position)
@@ -246,9 +228,9 @@ class StageRenderer:
             -round(cell_rect.width * PLAYER_CELL_INSET),
             -round(cell_rect.height * PLAYER_CELL_INSET),
         )
-        if carried is not None:
-            return self.move_rect_by_sprite_progress(base_rect, carried, cell_size)
         if hop_start is None or hop_end is None:
+            if carried is not None:
+                return self.move_rect_by_sprite_progress(base_rect, carried, cell_size)
             return base_rect
         progress = min(1.0, hop_elapsed / HOP_DURATION)
         arc = 4.0 * progress * (1.0 - progress)
@@ -272,19 +254,30 @@ class StageRenderer:
         return draw_rect
 
     def sprite_draw_rects(self, sprite, grid, cell_size: int, columns=None):
+        if self.is_crossing_map_edge(sprite, columns):
+            return []
         return [
             self.move_rect_by_sprite_progress(
-                self.cell_rect(grid, cell_size, position), sprite, cell_size, columns
+                self.cell_rect(grid, cell_size, sprite.position),
+                sprite,
+                cell_size,
+                columns,
             )
-            for position in sprite.get_positions()
         ]
+
+    def is_crossing_map_edge(self, sprite, columns) -> bool:
+        direction = getattr(sprite, "direction", "")
+        progress = getattr(sprite, "distance_progress", 0.0)
+        return (
+            columns is not None
+            and progress >= 0.5
+            and direction in SPRITE_PROGRESS_OFFSETS
+            and not 0 <= sprite.position.moved(direction).column < columns
+        )
 
     def move_rect_by_sprite_progress(self, rect, sprite, cell_size: int, columns=None):
         direction = getattr(sprite, "direction", "")
         progress = getattr(sprite, "distance_progress", 0.0)
-        if columns is not None and direction in SPRITE_PROGRESS_OFFSETS:
-            if not 0 <= sprite.position.moved(direction).column < columns:
-                progress = 0.0
         return self.move_rect_by_grid_progress(rect, direction, progress, cell_size)
 
     def move_rect_by_grid_progress(self, rect, direction, progress, cell_size):
@@ -325,14 +318,17 @@ class StageRenderer:
     def student_crowd_warning_image(self, crowd):
         frame = (
             int(max(0.0, crowd.elapsed_time) / STUDENT_CROWD_FRAME_DURATION)
-            % STUDENT_CROWD_FRAME_COUNT
+            % STUDENT_CROWD_WARNING_FRAME_COUNT
         )
         return self._get_asset_image(f"student_crowd_warning_frame_{frame}")
 
-    def student_crowd_runner_image(self, stream_index, base_frame):
-        runner = stream_index % STUDENT_CROWD_RUNNER_COUNT
-        frame = (base_frame + stream_index) % STUDENT_CROWD_FRAME_COUNT
-        return self._get_asset_image(f"student_crowd_runner_{runner}_frame_{frame}")
+    def student_crowd_active_image(self, crowd):
+        elapsed = max(0.0, crowd.elapsed_time - crowd.warning_time)
+        frame = (
+            int(elapsed / STUDENT_CROWD_FRAME_DURATION)
+            % STUDENT_CROWD_ACTIVE_FRAME_COUNT
+        )
+        return self._get_asset_image(f"student_crowd_active_frame_{frame}")
 
     def cell_rect(self, grid, cell_size: int, position: Position):
         rect = pygame.Rect(0, 0, round(cell_size), round(cell_size / 2))

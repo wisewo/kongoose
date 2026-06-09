@@ -13,7 +13,7 @@ from kongoose.models import (
     Position,
     TerrainType,
 )
-from kongoose.stage import Bike, BikeLane, Player, Stage, StudentCrowd, Turtle
+from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
 from kongoose.terrain import TerrainMap
 
 
@@ -174,7 +174,27 @@ def test_turtle_carries_player_after_river_mount() -> None:
     assert stage.player.position == Position(row=0, column=2)
 
 
-def test_player_can_board_turtle_that_is_mostly_in_next_tile() -> None:
+def test_player_cannot_board_turtle_before_visual_midpoint() -> None:
+    stage = make_stage(
+        [[TerrainType.START, TerrainType.RIVER, TerrainType.RIVER]],
+        Position(row=0, column=0),
+    )
+    turtle = Turtle(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        distance_progress=0.49,
+    )
+    stage.turtles.append(turtle)
+
+    result = stage.move_player(Direction.RIGHT)
+
+    assert result == MOVE_FAILED
+    assert stage.failure_reason == FailureReason.FELL_IN_RIVER
+    assert stage.player.mounted_turtle is None
+
+
+def test_player_can_board_turtle_after_visual_midpoint() -> None:
     stage = make_stage(
         [[TerrainType.START, TerrainType.RIVER, TerrainType.RIVER]],
         Position(row=0, column=0),
@@ -191,6 +211,89 @@ def test_player_can_board_turtle_that_is_mostly_in_next_tile() -> None:
 
     assert result == MOVE_MOVED
     assert stage.player.mounted_turtle is turtle
+    assert stage.player.position == Position(row=0, column=1)
+
+
+def test_mounted_player_moves_from_turtle_visual_position_to_land() -> None:
+    stage = make_stage(
+        [
+            [TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER],
+            [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
+        ],
+        Position(row=0, column=0),
+    )
+    turtle = Turtle(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        distance_progress=0.5,
+    )
+    stage.turtles.append(turtle)
+    stage.player.mounted_turtle = turtle
+
+    result = stage.move_player(Direction.DOWN)
+
+    assert result == MOVE_MOVED
+    assert stage.player.position == Position(row=1, column=1)
+    assert stage.player.mounted_turtle is None
+
+
+def test_mounted_player_transfers_from_visual_position_to_next_turtle() -> None:
+    stage = make_stage(
+        [
+            [TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER],
+            [TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER],
+        ],
+        Position(row=0, column=0),
+    )
+    source = Turtle(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        distance_progress=0.5,
+    )
+    target = Turtle(position=Position(row=1, column=1))
+    stage.turtles.extend([source, target])
+    stage.player.mounted_turtle = source
+
+    result = stage.move_player(Direction.DOWN)
+
+    assert result == MOVE_MOVED
+    assert stage.player.mounted_turtle is target
+    assert stage.player.position == Position(row=1, column=1)
+
+
+def test_stage_update_keeps_mounted_player_on_turtle_grid_position() -> None:
+    stage = make_stage(
+        [[TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER]],
+        Position(row=0, column=0),
+    )
+    turtle = Turtle(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        distance_progress=0.75,
+    )
+    stage.turtles.append(turtle)
+    stage.player.mounted_turtle = turtle
+
+    result = stage.update(0.0)
+
+    assert result == UPDATE_TURTLE_RIDE
+    assert stage.player.mounted_turtle is turtle
+    assert stage.player.position == Position(row=0, column=0)
+
+
+def test_turtle_occupies_only_its_current_tile() -> None:
+    turtle = Turtle(
+        position=Position(row=0, column=0),
+        direction=Direction.RIGHT,
+        speed=1.0,
+        distance_progress=0.5,
+    )
+
+    assert turtle.occupies(Position(row=0, column=0))
+    assert not turtle.occupies(Position(row=0, column=1))
 
 
 def test_player_fails_when_turtle_carries_them_off_screen() -> None:
@@ -242,7 +345,10 @@ def test_stage_update_does_not_emit_bike_sound_event() -> None:
     assert stage.update(0.1) == UPDATE_SAFE
 
 
-def test_bike_lane_stage_starts_with_pool_bikes_inactive() -> None:
+def test_initialize_keeps_repeating_bikes_active_and_resets_positions(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -255,66 +361,65 @@ def test_bike_lane_stage_starts_with_pool_bikes_inactive() -> None:
             Bike(
                 position=Position(row=1, column=0),
                 direction=Direction.RIGHT,
-                speed=0.0,
-                is_active=False,
+                speed=1.0,
             ),
             Bike(
-                position=Position(row=0, column=0),
-                direction=Direction.RIGHT,
-                speed=9.0,
-                is_active=False,
+                position=Position(row=1, column=2),
+                direction=Direction.LEFT,
+                speed=1.0,
             ),
-        ],
-        bike_lanes=[
-            BikeLane(row=1, direction=Direction.RIGHT, speed=4.0, spawn_gap=0.5),
         ],
     )
 
     stage.initialize()
+    stage.update(1.0)
 
-    assert {bike.position.row for bike in stage.bikes} == {0, 1}
-    assert not any(bike.is_active for bike in stage.bikes)
-    assert stage.update(0.49) == UPDATE_SAFE
-    assert [bike.position.row for bike in stage.bikes if bike.is_active] == [1]
+    stage.initialize()
+
+    assert [bike.position for bike in stage.bikes] == [
+        Position(row=1, column=0),
+        Position(row=1, column=2),
+    ]
 
 
-def test_bike_lanes_spawn_independently_from_offsets() -> None:
+def test_initialize_randomizes_bike_start_columns_by_consecutive_row_band(
+    monkeypatch,
+) -> None:
+    offsets = iter([2, 1])
+    monkeypatch.setattr(
+        "kongoose.stage.random.randrange", lambda _columns: next(offsets)
+    )
     stage = Stage(
         terrain_map=TerrainMap(
             [
-                [TerrainType.START, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
-                [TerrainType.LAND, TerrainType.LAND, TerrainType.LAND],
+                [TerrainType.START] + [TerrainType.LAND for _column in range(6)],
+                [TerrainType.LAND for _column in range(7)],
+                [TerrainType.LAND for _column in range(7)],
+                [TerrainType.LAND for _column in range(7)],
+                [TerrainType.LAND for _column in range(7)],
             ]
         ),
         player=Player(Position(row=0, column=1)),
         bikes=[
-            Bike(Position(row=1, column=0), Direction.RIGHT, 4.0, is_active=False),
-            Bike(Position(row=2, column=0), Direction.RIGHT, 4.0, is_active=False),
-        ],
-        bike_lanes=[
-            BikeLane(row=1, direction=Direction.RIGHT, speed=4.0, spawn_gap=2.0),
-            BikeLane(
-                row=2,
-                direction=Direction.RIGHT,
-                speed=4.0,
-                spawn_gap=2.0,
-                initial_offset=0.5,
-            ),
+            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0),
+            Bike(Position(row=1, column=3), Direction.RIGHT, 2.0),
+            Bike(Position(row=2, column=6), Direction.LEFT, 3.0),
+            Bike(Position(row=4, column=1), Direction.LEFT, 3.0),
         ],
     )
+
     stage.initialize()
 
-    first_update = stage.update(0.1)
-    assert first_update == UPDATE_SAFE
-    assert [bike.position.row for bike in stage.bikes if bike.is_active] == [1]
+    assert [(bike.position, bike.speed) for bike in stage.bikes] == [
+        (Position(row=1, column=2), 2.0),
+        (Position(row=1, column=5), 2.0),
+        (Position(row=2, column=1), 3.0),
+        (Position(row=4, column=2), 3.0),
+    ]
 
-    second_update = stage.update(0.4)
-    assert second_update == UPDATE_SAFE
-    assert {bike.position.row for bike in stage.bikes if bike.is_active} == {1, 2}
 
-
-def test_bike_lane_can_keep_multiple_bikes_active_in_one_row() -> None:
+def test_repeating_bikes_can_share_one_row_with_different_columns(monkeypatch) -> None:
+    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -324,27 +429,19 @@ def test_bike_lane_can_keep_multiple_bikes_active_in_one_row() -> None:
         ),
         player=Player(Position(row=0, column=1)),
         bikes=[
-            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0, is_active=False),
-            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0, is_active=False),
-        ],
-        bike_lanes=[
-            BikeLane(
-                row=1,
-                direction=Direction.RIGHT,
-                speed=2.0,
-                spawn_gap=0.5,
-                max_active=2,
-            )
+            Bike(Position(row=1, column=0), Direction.RIGHT, 2.0),
+            Bike(Position(row=1, column=3), Direction.RIGHT, 2.0),
         ],
     )
     stage.initialize()
 
-    stage.update(0.1)
-    stage.update(0.5)
+    result = stage.update(0.5)
 
-    active_bikes = [bike for bike in stage.bikes if bike.is_active]
-    assert len(active_bikes) == 2
-    assert {bike.position.row for bike in active_bikes} == {1}
+    assert result == UPDATE_SAFE
+    assert [bike.position for bike in stage.bikes] == [
+        Position(row=1, column=1),
+        Position(row=1, column=4),
+    ]
 
 
 def test_stage_update_wraps_bike_that_moves_past_left_edge() -> None:
@@ -381,10 +478,11 @@ def test_stage_update_wraps_turtle_that_moves_past_right_edge() -> None:
 
     stage.update(1.0)
 
-    assert turtle.get_positions() == (Position(row=0, column=0),)
+    assert turtle.position == Position(row=0, column=0)
 
 
-def test_initialize_restores_dynamic_sprite_positions_and_progress() -> None:
+def test_initialize_restores_dynamic_sprite_positions_and_progress(monkeypatch) -> None:
+    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
     stage = make_stage(
         [[TerrainType.START, TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER]],
         Position(row=0, column=0),
@@ -410,7 +508,6 @@ def test_initialize_restores_dynamic_sprite_positions_and_progress() -> None:
     assert bike.distance_progress == 0.0
     assert turtle.position == Position(row=0, column=1)
     assert turtle.distance_progress == 0.0
-    assert turtle.get_positions() == (Position(row=0, column=1),)
 
 
 def test_initialize_resets_student_crowd_elapsed_time() -> None:

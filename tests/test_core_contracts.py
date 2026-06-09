@@ -47,7 +47,7 @@ def test_terrain_map_allows_river_but_blocks_walls_and_out_of_bounds() -> None:
     terrain_map = TerrainMap(
         [
             [TerrainType.START, TerrainType.LAND, TerrainType.WALL],
-            [TerrainType.RIVER, TerrainType.SAFE, TerrainType.GOAL],
+            [TerrainType.RIVER, TerrainType.SAFE, TerrainType.LAND],
         ]
     )
 
@@ -55,6 +55,7 @@ def test_terrain_map_allows_river_but_blocks_walls_and_out_of_bounds() -> None:
     assert terrain_map.columns == 3
     assert terrain_map.can_enter(Position(row=0, column=1))
     assert terrain_map.can_enter(Position(row=1, column=0))
+    assert terrain_map.can_enter(Position(row=1, column=2))
     assert not terrain_map.can_enter(Position(row=0, column=2))
     assert not terrain_map.can_enter(Position(row=-1, column=0))
     assert not terrain_map.can_enter(Position(row=0, column=3))
@@ -77,6 +78,17 @@ def test_result_constants_are_plain_strings() -> None:
     assert MOVE_FAILED == "failed"
     assert UPDATE_SAFE == "safe"
     assert UPDATE_FAILED == "failed"
+
+
+def test_terrain_types_match_fixed_stage_tiles() -> None:
+    assert (
+        TerrainType.LAND,
+        TerrainType.RIVER,
+        TerrainType.SAFE,
+        TerrainType.WALL,
+        TerrainType.START,
+        TerrainType.GOAL,
+    ) == (".", "~", "-", "#", "S", "G")
 
 
 def test_game_changes_scene_and_calls_enter() -> None:
