@@ -54,16 +54,18 @@ def test_save_manager_returns_default_progress_when_file_is_missing(tmp_path) ->
 
 
 def test_star_rating_uses_stage_balance_thresholds() -> None:
-    assert StarRating.calculate(clear_time=40, stage_id=1) == 3
-    assert StarRating.calculate(clear_time=60, stage_id=1) == 2
-    assert StarRating.calculate(clear_time=61, stage_id=1) == 1
-    assert StarRating.calculate(clear_time=75, stage_id=2) == 3
-    assert StarRating.calculate(clear_time=113, stage_id=2) == 2
-    assert StarRating.calculate(clear_time=75, stage_id=3) == 3
-    assert StarRating.calculate(clear_time=113, stage_id=3) == 2
+    assert StarRating.calculate(clear_time=15, stage_id=1) == 3
+    assert StarRating.calculate(clear_time=30, stage_id=1) == 2
+    assert StarRating.calculate(clear_time=30.1, stage_id=1) == 1
+    assert StarRating.calculate(clear_time=20, stage_id=2) == 3
+    assert StarRating.calculate(clear_time=40, stage_id=2) == 2
+    assert StarRating.calculate(clear_time=40.1, stage_id=2) == 1
+    assert StarRating.calculate(clear_time=60, stage_id=3) == 3
+    assert StarRating.calculate(clear_time=85, stage_id=3) == 2
+    assert StarRating.calculate(clear_time=85.1, stage_id=3) == 1
     assert StarRating.calculate(clear_time=100, stage_id=4) == 3
-    assert StarRating.calculate(clear_time=150, stage_id=4) == 2
-    assert StarRating.calculate(clear_time=151, stage_id=4) == 1
+    assert StarRating.calculate(clear_time=120, stage_id=4) == 2
+    assert StarRating.calculate(clear_time=120.1, stage_id=4) == 1
 
 
 def test_timer_tracks_elapsed_time_with_injected_clock() -> None:
