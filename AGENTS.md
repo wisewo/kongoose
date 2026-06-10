@@ -4,8 +4,8 @@
 
 This project is a Pygame-based grid movement game.
 It is inspired by Crossy Road-style one-tile movement and obstacle avoidance,
-but reinterpreted as a fixed-stage campus crossing game starring Geon-goose
-(`건구스`).
+but reinterpreted as a fixed-stage campus crossing game titled
+`길Kon너 Goose들`, starring kongoose(건구스).
 
 The first version should remain small and explainable for a team project:
 four fixed stages, keyboard movement, obstacle/lake/turtle interactions,
@@ -39,8 +39,8 @@ Use these documents when behavior, traceability, or domain meaning is unclear:
 
 ## Source Size Guardrail
 
-- Current runtime source size, excluding tests and data files, is 1,412 total
-  lines across the `kongoose/*.py` code files.
+- Current runtime source size, excluding tests and data files, is 1,445 total
+  lines across the `src/*.py` code files.
 - For each implementation change, re-check the runtime source line count
   excluding tests and data, and confirm it stays within 500-1,500 total lines.
 - Measure this count from the repository root with

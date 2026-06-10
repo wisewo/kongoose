@@ -1,8 +1,8 @@
 from enum import Enum
 
-from kongoose.game import Game
-from kongoose.models import FailureReason
-from kongoose.scenes import FailedScene
+from src.game import Game
+from src.models import FailureReason
+from src.scenes import FailedScene
 
 
 class FailedSceneProbe(FailedScene):

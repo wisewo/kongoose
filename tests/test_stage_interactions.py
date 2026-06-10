@@ -1,4 +1,4 @@
-from kongoose.models import (
+from src.models import (
     MOVE_BLOCKED,
     MOVE_CLEARED,
     MOVE_FAILED,
@@ -13,8 +13,8 @@ from kongoose.models import (
     Position,
     TerrainType,
 )
-from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
-from kongoose.terrain import TerrainMap
+from src.stage import Bike, Player, Stage, StudentCrowd, Turtle
+from src.terrain import TerrainMap
 
 
 def make_stage(
@@ -348,7 +348,7 @@ def test_stage_update_does_not_emit_bike_sound_event() -> None:
 def test_initialize_keeps_repeating_bikes_active_and_resets_positions(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
+    monkeypatch.setattr("src.stage.random.randrange", lambda _columns: 0)
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -386,9 +386,7 @@ def test_initialize_randomizes_bike_start_columns_by_consecutive_row_band(
     monkeypatch,
 ) -> None:
     offsets = iter([2, 1])
-    monkeypatch.setattr(
-        "kongoose.stage.random.randrange", lambda _columns: next(offsets)
-    )
+    monkeypatch.setattr("src.stage.random.randrange", lambda _columns: next(offsets))
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -419,7 +417,7 @@ def test_initialize_randomizes_bike_start_columns_by_consecutive_row_band(
 
 
 def test_repeating_bikes_can_share_one_row_with_different_columns(monkeypatch) -> None:
-    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
+    monkeypatch.setattr("src.stage.random.randrange", lambda _columns: 0)
     stage = Stage(
         terrain_map=TerrainMap(
             [
@@ -482,7 +480,7 @@ def test_stage_update_wraps_turtle_that_moves_past_right_edge() -> None:
 
 
 def test_initialize_restores_dynamic_sprite_positions_and_progress(monkeypatch) -> None:
-    monkeypatch.setattr("kongoose.stage.random.randrange", lambda _columns: 0)
+    monkeypatch.setattr("src.stage.random.randrange", lambda _columns: 0)
     stage = make_stage(
         [[TerrainType.START, TerrainType.RIVER, TerrainType.RIVER, TerrainType.RIVER]],
         Position(row=0, column=0),

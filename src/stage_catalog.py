@@ -1,9 +1,9 @@
 import csv
 from pathlib import Path
 
-from kongoose.models import Position
-from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
-from kongoose.terrain import TerrainMap
+from src.models import Position
+from src.stage import Bike, Player, Stage, StudentCrowd, Turtle
+from src.terrain import TerrainMap
 
 STAGE_IDS = (1, 2, 3, 4)
 STAGE_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "stages"

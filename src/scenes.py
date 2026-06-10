@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pygame
 
-from kongoose.models import MOVE_BLOCKED, Direction, Position, SoundCue
-from kongoose.rendering import (
+from src.models import MOVE_BLOCKED, Direction, Position, SoundCue
+from src.rendering import (
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
     TEXT_COLOR,
@@ -158,9 +158,9 @@ class MainScene(EmptyScene):
         )
         self._draw_text_screen(
             surface,
-            "Kongoose",
+            "길Kon너 Goose들",
             [
-                "Campus crossing with Geon-goose",
+                "Campus crossing with kongoose(건구스)",
                 f"Unlocked stages: {unlocked_count}/{MAX_STAGE_COUNT}",
                 "",
                 *MAIN_ACTION_LINES,

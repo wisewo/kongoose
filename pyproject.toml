@@ -1,6 +1,14 @@
 [tool.ruff]
 target-version = "py310"
 line-length = 88
+extend-exclude = [
+    ".pytest-pr-tmp",
+    ".pytest-tmp*",
+    ".pytest_tmp",
+    ".tmp",
+    "codex_export",
+    "output",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

@@ -1,7 +1,7 @@
 import pytest
 
-from kongoose.game import Game
-from kongoose.models import (
+from src.game import Game
+from src.models import (
     MOVE_BLOCKED,
     MOVE_CLEARED,
     MOVE_FAILED,
@@ -13,8 +13,8 @@ from kongoose.models import (
     Position,
     TerrainType,
 )
-from kongoose.stage import Player, Stage, Turtle
-from kongoose.terrain import TerrainMap
+from src.stage import Player, Stage, Turtle
+from src.terrain import TerrainMap
 
 
 class DummyScene:

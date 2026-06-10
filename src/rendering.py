@@ -1,6 +1,6 @@
 import pygame
 
-from kongoose.models import Direction, Position, TerrainType
+from src.models import Direction, Position, TerrainType
 
 HOP_DURATION, HOP_SIZE_BONUS, HOP_HEIGHT = 0.18, 0.08, 0.22
 PLAYER_CELL_INSET = 0.25

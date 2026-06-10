@@ -6,8 +6,8 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import pytest
 
-from kongoose.game import Game
-from kongoose.models import (
+from src.game import Game
+from src.models import (
     MOVE_CLEARED,
     MOVE_FAILED,
     MOVE_MOVED,
@@ -20,7 +20,7 @@ from kongoose.models import (
     SoundCue,
     TerrainType,
 )
-from kongoose.rendering import (
+from src.rendering import (
     BIKE_COLOR,
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
@@ -33,15 +33,15 @@ from kongoose.rendering import (
     TURTLE_COLOR,
     StageRenderer,
 )
-from kongoose.scenes import (
+from src.scenes import (
     FailedScene,
     MainScene,
     PlayingScene,
     ResultScene,
     StageSelectScene,
 )
-from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
-from kongoose.terrain import TerrainMap
+from src.stage import Bike, Player, Stage, StudentCrowd, Turtle
+from src.terrain import TerrainMap
 
 
 class ProgressStub:
@@ -559,7 +559,7 @@ def test_student_crowd_sound_plays_on_active_event_without_channel_state() -> No
 
 
 def test_student_crowd_sound_is_not_managed_as_continuous_channel() -> None:
-    from kongoose.stage import StudentCrowd
+    from src.stage import StudentCrowd
 
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()

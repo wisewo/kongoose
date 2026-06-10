@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_DIR = PROJECT_ROOT / "kongoose"
+DEFAULT_SOURCE_DIR = PROJECT_ROOT / "src"
 
 
 def iter_source_files(source_dir: Path):
@@ -17,7 +17,7 @@ def count_source_lines(source_dir: Path = DEFAULT_SOURCE_DIR) -> int:
 
 
 def main() -> None:
-    parser = ArgumentParser(description="Count runtime source lines in kongoose/*.py.")
+    parser = ArgumentParser(description="Count runtime source lines in src/*.py.")
     parser.add_argument(
         "source_dir",
         nargs="?",
