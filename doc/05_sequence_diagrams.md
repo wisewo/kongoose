@@ -3,25 +3,23 @@
 ## Notes
 
 - 이 문서는 SSD보다 한 단계 내부 설계에 가까운 Sequence Diagram이다.
-- 각 Sequence Diagram은 대응되는 SSD의 시스템 오퍼레이션에서 시작한다.
-- Actor에서 `Game`으로 향하는 첫 메시지는 SSD의 시스템 오퍼레이션을 그대로 사용한다.
-- 이후 객체 간 메시지는 Class Diagram의 책임과 PEP 8 명명 규칙을 따른다.
-- 별도 `ScreenManager`는 두지 않고, 화면별 `Scene.draw(surface)`가 사용자에게 보이는 화면을 그린다.
-- 게임 진행 화면의 2.5D 표현은 `PlayingScene.draw(surface)`에서 2D row/column 좌표를 얕은 등각 투영 화면 좌표로 변환해 표시하는 렌더링 책임이다. 이 표현은 `Stage`의 이동, 충돌, 실패, 클리어 판정 흐름을 바꾸지 않는다.
-- `TerrainMap`은 맵 범위와 벽 같은 정적 진입 불가 지형을 판단하며, 강 칸은 `can_enter(position)`에서 막지 않는다.
-- `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다. 같은 판정 규칙은 플레이어 이동 직후와 `Stage.update(dt)` 직후에 모두 적용한다.
-- 자라 탑승과 하차 판정은 화면에 보이는 위치와 맞추기 위해 `Turtle.interaction_position()`을 사용한다. 자라 이동 진행률이 50% 미만이면 현재 칸, 50% 이상이면 다음 칸을 기준으로 한다.
+- 각 Sequence Diagram은 세부 설계의 주요 객체 호출 흐름을 기준으로 한다.
+- 키 입력은 각 `Scene.handle_event(event)`가 받고, 필요한 경우 `Game` 공개 메서드를 호출한다.
+- 별도 `ScreenManager`는 두지 않고, `Game.change_scene(scene)`가 현재 화면 객체를 교체한 뒤 `scene.enter(game)`를 호출한다.
+- 게임 진행 화면의 2.5D 표현은 `StageRenderer`가 2D row/column 좌표를 얕은 등각 투영 화면 좌표로 변환해 그리는 렌더링 책임이다.
+- `TerrainMap.can_enter(position)`은 맵 범위와 벽만 막으며, 강 칸은 막지 않는다.
+- `Stage`는 지형과 동적 객체를 조합해 이동, 실패, 경고, 자라 탑승, 클리어를 판정한다.
+- 이동 결과와 갱신 결과는 Result Object가 아니라 공통 모델의 문자열 상수이다.
+- 자라 탑승과 하차 판정은 `Turtle.interaction_position()`을 사용한다. 이동 진행률이 50% 미만이면 현재 칸, 50% 이상이면 다음 칸을 기준으로 한다.
 - `Goal` 클래스는 사용하지 않고 `TerrainType.GOAL`로 목적지를 표현한다.
-- 사운드는 소리별 메서드가 아니라 `SoundManager.play(cue)`로 재생하며, 필요한 경우 볼륨을 함께 전달한다. Stage 2/3/4에 고정 매핑된 자전거/강물 환경음은 `loops=-1`로 반복 재생하고 스테이지 이탈 시 `SoundManager.stop(cue)`로 정지한다.
-- 게임 루프의 시간 흐름은 SSD의 Actor로 두지 않고, `Game.run()` 내부에서 현재 `Scene.update(dt)`와 `Scene.draw(surface)`가 반복되는 흐름으로 표현한다.
-- Use Case와의 Traceability를 위해 `SD-01`부터 `SD-07`까지 `UC-01`부터 `UC-07`에 대응시킨다.
+- 사운드는 `SoundManager.play(cue, loops=0, volume=None)`와 `SoundManager.stop(cue)`로 처리한다.
 
 ## Traceability
 
-| Sequence Diagram | Related Use Case | System Operation | Main Related FR |
+| Sequence Diagram | Related Use Case | Main System Operation | Main Related FR |
 |---|---|---|---|
 | SD-01 | UC-01 메인 화면 진입 | `start_game()`, `return_to_main()` | FR-01, FR-02, FR-19, FR-20, FR-24 |
-| SD-02 | UC-02 스테이지 선택 화면 진입 | `open_stage_select()` | FR-02, FR-03, FR-04, FR-13, FR-14, FR-24 |
+| SD-02 | UC-02 스테이지 선택 화면 진입 | `open_stage_select()` | FR-02, FR-03, FR-04, FR-13, FR-14, FR-20, FR-24 |
 | SD-03 | UC-03 게임 종료 | `quit_game()` | FR-01 |
 | SD-04 | UC-04 스테이지 선택 | `select_stage(stage_id)` | FR-02, FR-03, FR-04, FR-14, FR-24 |
 | SD-05 | UC-05 캐릭터 이동 | `move_player(direction)` | FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25 |
@@ -35,24 +33,28 @@ sequenceDiagram
     actor User as Player
     participant Game
     participant SaveManager
-    participant Progress
+    participant SoundManager
     participant MainScene
+    participant Progress
 
-    alt 게임 프로그램 실행
-        User->>Game: start_game()
+    alt Game 생성 및 실행
         Game->>SaveManager: load_progress()
-        SaveManager-->>Game: progress
+        SaveManager-->>Game: Progress
+        User->>Game: run()
+        Game->>SoundManager: load(DEFAULT_SOUND_PATHS)
+        Game->>SoundManager: play(BACKGROUND_MUSIC, loops=-1)
         Game->>Game: change_scene(MainScene)
-    else 다른 화면에서 메인 화면 이동 선택
+    else 다른 화면에서 메인 이동
         User->>Game: return_to_main()
+        Game->>Game: _stop_stage_ambience()
+        Game->>SoundManager: play(UI_SELECT)
         Game->>Game: change_scene(MainScene)
     end
 
     Game->>MainScene: enter(game)
-    MainScene->>Progress: get_unlocked_stages()
-    Progress-->>MainScene: unlocked_stages
+    MainScene->>Progress: is_stage_unlocked(stage_id) for 1..4
     MainScene->>MainScene: draw(surface)
-    MainScene-->>User: 메인 화면과 저장된 진행 상태 표시
+    MainScene-->>User: 메인 화면, 해금 수, 키 안내 표시
 ```
 
 ## SD-02 / UC-02 스테이지 선택 화면 진입
@@ -60,18 +62,37 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
+    participant MainScene
+    participant PlayingScene
+    participant FailedScene
+    participant ResultScene
     participant Game
-    participant Progress
+    participant SoundManager
     participant StageSelectScene
+    participant Progress
 
-    User->>Game: open_stage_select()
-    Game->>Game: get_stage_list()
-    Game->>Progress: get_unlocked_stages()
-    Progress-->>Game: unlocked_stages
+    alt 메인 화면 Enter/Space
+        User->>MainScene: handle_event(KEYDOWN)
+        MainScene->>Game: open_stage_select()
+    else 게임 진행 화면 Esc/B
+        User->>PlayingScene: handle_event(KEYDOWN)
+        PlayingScene->>Game: open_stage_select()
+    else 실패 화면 S/B
+        User->>FailedScene: handle_event(KEYDOWN)
+        FailedScene->>Game: open_stage_select()
+    else 결과 화면 S/B
+        User->>ResultScene: handle_event(KEYDOWN)
+        ResultScene->>Game: open_stage_select()
+    end
+
+    Game->>Game: _stop_stage_ambience()
+    Game->>SoundManager: play(UI_SELECT)
     Game->>Game: change_scene(StageSelectScene)
     Game->>StageSelectScene: enter(game)
+    StageSelectScene->>Progress: is_stage_unlocked(stage_id) for 1..4
+    StageSelectScene->>Progress: get_best_stars(stage_id) for 1..4
     StageSelectScene->>StageSelectScene: draw(surface)
-    StageSelectScene-->>User: 스테이지 목록과 해금 상태 표시
+    StageSelectScene-->>User: 스테이지 목록, 해금 상태, 최고 별점 표시
 ```
 
 ## SD-03 / UC-03 게임 종료
@@ -79,11 +100,13 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
+    participant MainScene
     participant Game
 
-    User->>Game: quit_game()
-    Note over Game: 실행 중 플래그를 종료 상태로 변경하고 Pygame 종료 준비
-    Game-->>User: 프로그램 종료
+    User->>MainScene: handle_event(Esc or Q)
+    MainScene->>Game: quit_game()
+    Game->>Game: running = False
+    Game-->>User: 게임 루프 종료 후 pygame.quit()
 ```
 
 ## SD-04 / UC-04 스테이지 선택
@@ -91,35 +114,40 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
+    participant StageSelectScene
     participant Game
     participant Progress
+    participant SoundManager
     participant Stage
     participant Timer
-    participant SoundManager
-    participant StageSelectScene
     participant PlayingScene
 
-    User->>Game: select_stage(stage_id)
+    User->>StageSelectScene: handle_event(number key 1..4)
+    StageSelectScene->>Game: select_stage(stage_id)
     Game->>Progress: is_stage_unlocked(stage_id)
 
     alt 선택한 스테이지가 해금됨
         Progress-->>Game: true
+        Game->>SoundManager: play(UI_SELECT)
         Game->>Game: start_stage(stage_id)
         Game->>Stage: initialize()
         Game->>Timer: reset()
         Game->>Timer: start()
         Game->>Game: change_scene(PlayingScene)
         Game->>PlayingScene: enter(game)
-        opt 고정 환경음이 있는 스테이지
-            Game->>SoundManager: play(SoundCue.BIKE_AMBIENCE or WATER_AMBIENCE, loops=-1, volume)
+        Game->>Game: _sync_stage_ambience()
+        Game->>SoundManager: stop(BIKE_AMBIENCE)
+        Game->>SoundManager: stop(WATER_AMBIENCE)
+        opt Stage 2/3/4
+            Game->>SoundManager: play(BIKE_AMBIENCE or WATER_AMBIENCE, loops=-1, volume)
         end
         PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 게임 화면 표시
     else 선택한 스테이지가 잠김
         Progress-->>Game: false
-        Note over StageSelectScene: 잠긴 스테이지 안내 상태 설정
+        Game->>StageSelectScene: set_message("Stage N is locked.")
         StageSelectScene->>StageSelectScene: draw(surface)
-        StageSelectScene-->>User: 잠긴 스테이지 안내 표시
+        StageSelectScene-->>User: 스테이지 선택 화면 유지
     end
 ```
 
@@ -128,15 +156,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
-    participant Game
     participant PlayingScene
+    participant Game
     participant Stage
-    participant Position
     participant TerrainMap
-    participant PlayerObj as Player
-    participant Bike
-    participant StudentCrowd
-    participant Turtle
+    participant Position
     participant Timer
     participant StarRating
     participant Progress
@@ -145,106 +169,101 @@ sequenceDiagram
     participant FailedScene
     participant ResultScene
 
-    User->>Game: move_player(direction)
-    Game->>PlayingScene: handle_event(direction)
-    PlayingScene->>Stage: move_player(direction)
+    User->>PlayingScene: handle_event(arrow key)
+    PlayingScene->>PlayingScene: remember start_position and target_position
+    PlayingScene->>Game: move_player(direction)
+    Game->>Stage: move_player(direction)
+    Stage->>Stage: _player_interaction_position()
+    Stage->>TerrainMap: can_enter(move_origin)
     Stage->>Position: moved(direction)
     Position-->>Stage: target_position
     Stage->>TerrainMap: can_enter(target_position)
 
-    alt 이동 불가능한 위치
+    alt target_position is blocked or out of bounds
         TerrainMap-->>Stage: false
-        Stage-->>PlayingScene: MoveResult(blocked)
-        PlayingScene->>SoundManager: play(SoundCue.BLOCKED)
-        Note over PlayingScene: 플레이어 위치는 유지하고 막힌 방향으로 짧은 폴짝 애니메이션을 표시한다. 착지 시 MOVE_SUCCESS는 재생하지 않는다.
+        Stage-->>Game: MOVE_BLOCKED
+        Game->>SoundManager: play(BLOCKED)
+        Game-->>PlayingScene: MOVE_BLOCKED
+        PlayingScene->>PlayingScene: _start_hop(start_position, target_position, false)
         PlayingScene->>PlayingScene: draw(surface)
-        PlayingScene-->>User: 현재 게임 화면 갱신
-    else 이동 가능한 위치
+        PlayingScene-->>User: 막힌 방향 홉과 게임 화면 표시
+    else target_position can be entered
         TerrainMap-->>Stage: true
-        Stage->>PlayerObj: position = target_position
-        Stage->>TerrainMap: get_terrain(target_position)
-        TerrainMap-->>Stage: terrain_type
-        Stage->>Bike: occupies(target_position)
-        Stage->>StudentCrowd: occupies(target_position)
-        Stage->>Turtle: interaction_position()
+        Stage->>Stage: player.position = target_position
         Stage->>Stage: evaluate_player_state()
 
-        alt 목적지 도착
-            Stage-->>PlayingScene: MoveResult(cleared)
-            PlayingScene->>Timer: get_elapsed_time()
-            Timer-->>PlayingScene: clear_time
-            PlayingScene->>StarRating: calculate(clear_time, stage)
-            StarRating-->>PlayingScene: stars
-            PlayingScene->>Progress: record_stage_clear(stage_id, stars)
-            PlayingScene->>SaveManager: save_progress(progress)
-            PlayingScene->>Game: change_scene(ResultScene)
+        alt GOAL reached
+            Stage-->>Game: MOVE_CLEARED
+            Game->>Game: clear_current_stage()
+            Game->>Timer: stop()
+            Game->>Game: _stop_stage_ambience()
+            Game->>Timer: get_elapsed_time()
+            Timer-->>Game: clear_time
+            Game->>StarRating: calculate(clear_time, stage_id)
+            StarRating-->>Game: stars
+            Game->>Progress: record_stage_clear(stage_id, stars)
+            Game->>SaveManager: save_progress(progress)
+            Game->>Game: change_scene(ResultScene)
             Game->>ResultScene: enter(game)
-            PlayingScene->>SoundManager: play(SoundCue.CLEAR_SCREEN)
+            Game->>SoundManager: play(CLEAR_SCREEN)
             ResultScene->>ResultScene: draw(surface)
-            ResultScene-->>User: 스테이지 클리어 화면과 별점 표시
-        else 실패 조건 발생
-            Stage-->>PlayingScene: MoveResult(failed, failure_reason)
-            opt 강/호수 추락
-                PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
+            ResultScene-->>User: 클리어 시간과 별점 표시
+        else failure reason set
+            Stage-->>Game: MOVE_FAILED
+            Game->>Game: _handle_failure_from_stage()
+            opt FailureReason.FELL_IN_RIVER
+                Game->>SoundManager: play(LAKE_SPLASH)
             end
-            opt 플레이어-자전거 충돌
-                PlayingScene->>SoundManager: play(SoundCue.BIKE_COLLISION)
+            opt FailureReason.HIT_BIKE
+                Game->>SoundManager: play(BIKE_COLLISION)
             end
-            PlayingScene->>Game: change_scene(FailedScene)
+            Game->>Game: fail_current_stage(reason)
+            Game->>Game: _stop_stage_ambience()
+            Game->>Game: change_scene(FailedScene)
             Game->>FailedScene: enter(game)
-            PlayingScene->>SoundManager: play(SoundCue.FAILURE_SCREEN)
+            Game->>SoundManager: play(FAILURE_SCREEN)
             FailedScene->>FailedScene: draw(surface)
-            FailedScene-->>User: 실패 화면 표시
-        else 자라 탑승
-            Stage-->>PlayingScene: MoveResult(moved)
-            PlayingScene->>SoundManager: play(SoundCue.TURTLE)
-            PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 변경된 게임 화면과 상태 정보 표시
-        else 일반 이동
-            Stage-->>PlayingScene: MoveResult(moved)
-            PlayingScene->>SoundManager: play(SoundCue.MOVE_START)
-            Note over PlayingScene,Stage: 이동 직후 판정은 완료되며, 게임 루프 갱신에서도 같은 판정 규칙을 재사용
-            PlayingScene->>SoundManager: play(SoundCue.MOVE_SUCCESS)
-            PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 변경된 게임 화면과 상태 정보 표시
+            FailedScene-->>User: 실패 원인 표시
+        else moved onto river turtle
+            Stage-->>Game: MOVE_MOVED
+            Game->>SoundManager: play(TURTLE)
+            Game-->>PlayingScene: MOVE_MOVED
+            PlayingScene->>PlayingScene: _start_hop(start_position, player.position, true)
+            PlayingScene-->>User: 자라 탑승 이동 표시
+        else regular moved
+            Stage-->>Game: MOVE_MOVED
+            Game->>SoundManager: play(MOVE_START)
+            Game-->>PlayingScene: MOVE_MOVED
+            PlayingScene->>PlayingScene: _start_hop(start_position, player.position, true)
+            PlayingScene-->>User: 일반 이동 표시
         end
     end
 
-    loop Game.run() 내부 반복
-        Game->>PlayingScene: update(dt)
-        PlayingScene->>Stage: update(dt)
-        Stage->>Bike: update(dt)
-        Stage->>StudentCrowd: update(dt)
-        Stage->>Turtle: update(dt)
-        Stage->>Stage: evaluate_player_state()
-        Stage-->>PlayingScene: StageUpdateResult(result_type)
+    loop PlayingScene.update(dt)
+        PlayingScene->>PlayingScene: advance hop timer
+        opt hop finished after successful move
+            PlayingScene->>SoundManager: play(MOVE_SUCCESS)
+        end
+        PlayingScene->>Game: update_stage(dt)
+        Game->>Stage: update(dt)
+        Stage->>Stage: update bikes, turtles, student_crowds
+        Stage->>Stage: wrap bikes, evaluate_player_state(), wrap turtles
+        Stage-->>Game: UPDATE_* string
 
-        alt 실패 조건 발생
-            opt 강/호수 추락
-                PlayingScene->>SoundManager: play(SoundCue.LAKE_SPLASH)
-            end
-            opt 플레이어-자전거 충돌
-                PlayingScene->>SoundManager: play(SoundCue.BIKE_COLLISION)
-            end
-            PlayingScene->>Game: change_scene(FailedScene)
-            Game->>FailedScene: enter(game)
-            PlayingScene->>SoundManager: play(SoundCue.FAILURE_SCREEN)
-            FailedScene->>FailedScene: draw(surface)
-            FailedScene-->>User: 실패 화면 표시
-        else 학생 무리 경고 발생
+        alt UPDATE_FAILED
+            Game->>Game: _handle_failure_from_stage()
+            Game-->>User: 실패 화면 표시
+        else UPDATE_STUDENT_CROWD_ACTIVE
+            Game->>SoundManager: play(STUDENT_CROWD)
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 시각 경고와 게임 화면 표시
-        else 학생 무리 실제 등장
-            PlayingScene->>SoundManager: play(SoundCue.STUDENT_CROWD)
+            PlayingScene-->>User: 학생 무리 활성 상태 표시
+        else UPDATE_WARNING
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 학생 무리 등장 상태, 효과음, 게임 화면 표시
-        else 자라 탑승
-            PlayingScene->>SoundManager: play(SoundCue.TURTLE)
+            PlayingScene-->>User: 학생 무리 경고 표시
+        else UPDATE_TURTLE_RIDE or UPDATE_SAFE
+            PlayingScene->>PlayingScene: _update_camera_focus(dt)
             PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
-        else 안전 상태
-            PlayingScene->>PlayingScene: draw(surface)
-            PlayingScene-->>User: 갱신된 게임 화면과 상태 정보 표시
+            PlayingScene-->>User: 갱신된 게임 화면과 HUD 표시
         end
     end
 ```
@@ -254,40 +273,40 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
+    participant FailedScene
     participant Game
+    participant SoundManager
     participant Stage
     participant Timer
-    participant Progress
-    participant FailedScene
+    participant PlayingScene
     participant StageSelectScene
     participant MainScene
-    participant PlayingScene
 
     FailedScene->>FailedScene: draw(surface)
     FailedScene-->>User: 실패 화면 표시
 
-    alt 재시작 버튼 클릭
-        User->>Game: restart_stage()
+    alt R 입력
+        User->>FailedScene: handle_event(KEYDOWN)
+        FailedScene->>Game: restart_stage()
+        Game->>SoundManager: play(UI_SELECT)
+        Game->>Game: start_stage(current_stage_id)
         Game->>Stage: initialize()
         Game->>Timer: reset()
         Game->>Timer: start()
         Game->>Game: change_scene(PlayingScene)
         Game->>PlayingScene: enter(game)
-        PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 게임 화면 표시
-    else 스테이지 선택 버튼 클릭
-        User->>Game: open_stage_select()
-        Game->>Progress: get_unlocked_stages()
-        Progress-->>Game: unlocked_stages
+    else S/B 입력
+        User->>FailedScene: handle_event(KEYDOWN)
+        FailedScene->>Game: open_stage_select()
         Game->>Game: change_scene(StageSelectScene)
         Game->>StageSelectScene: enter(game)
-        StageSelectScene->>StageSelectScene: draw(surface)
         StageSelectScene-->>User: 스테이지 선택 화면 표시
-    else 메인 화면 버튼 클릭
-        User->>Game: return_to_main()
+    else M/Esc 입력
+        User->>FailedScene: handle_event(KEYDOWN)
+        FailedScene->>Game: return_to_main()
         Game->>Game: change_scene(MainScene)
         Game->>MainScene: enter(game)
-        MainScene->>MainScene: draw(surface)
         MainScene-->>User: 메인 화면 표시
     end
 ```
@@ -297,56 +316,56 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User as Player
+    participant ResultScene
     participant Game
+    participant SoundManager
     participant Stage
     participant Timer
-    participant Progress
-    participant ResultScene
     participant PlayingScene
     participant StageSelectScene
     participant MainScene
 
     ResultScene->>ResultScene: draw(surface)
-    ResultScene-->>User: 클리어 시간, 별점, 다음 행동 표시
+    ResultScene-->>User: 클리어 시간, 별점, 행동 키 표시
 
-    alt 다음 스테이지 버튼 클릭
-        User->>Game: start_next_stage()
-        alt 다음 스테이지가 있음
+    alt N 입력
+        User->>ResultScene: handle_event(KEYDOWN)
+        ResultScene->>Game: start_next_stage()
+        alt next_stage_id <= 4
+            Game->>SoundManager: play(UI_SELECT)
             Game->>Game: start_stage(next_stage_id)
             Game->>Stage: initialize()
             Game->>Timer: reset()
             Game->>Timer: start()
             Game->>Game: change_scene(PlayingScene)
             Game->>PlayingScene: enter(game)
-            PlayingScene->>PlayingScene: draw(surface)
             PlayingScene-->>User: 다음 스테이지 게임 화면 표시
-        else 마지막 스테이지임
-            Note over ResultScene: 다음 스테이지 없음 안내 상태 설정
-            ResultScene->>ResultScene: draw(surface)
-            ResultScene-->>User: 더 이상 진행할 스테이지가 없다는 안내 표시
+        else next_stage_id > 4
+            Game->>ResultScene: set_message("There is no next stage.")
+            ResultScene-->>User: 결과 화면 유지
         end
-    else 재시작 버튼 클릭
-        User->>Game: restart_stage()
+    else R 입력
+        User->>ResultScene: handle_event(KEYDOWN)
+        ResultScene->>Game: restart_stage()
+        Game->>SoundManager: play(UI_SELECT)
+        Game->>Game: start_stage(current_stage_id)
         Game->>Stage: initialize()
         Game->>Timer: reset()
         Game->>Timer: start()
         Game->>Game: change_scene(PlayingScene)
         Game->>PlayingScene: enter(game)
-        PlayingScene->>PlayingScene: draw(surface)
         PlayingScene-->>User: 현재 스테이지 게임 화면 표시
-    else 스테이지 선택 버튼 클릭
-        User->>Game: open_stage_select()
-        Game->>Progress: get_unlocked_stages()
-        Progress-->>Game: unlocked_stages
+    else S/B 입력
+        User->>ResultScene: handle_event(KEYDOWN)
+        ResultScene->>Game: open_stage_select()
         Game->>Game: change_scene(StageSelectScene)
         Game->>StageSelectScene: enter(game)
-        StageSelectScene->>StageSelectScene: draw(surface)
         StageSelectScene-->>User: 스테이지 선택 화면 표시
-    else 메인 화면 버튼 클릭
-        User->>Game: return_to_main()
+    else M/Esc 입력
+        User->>ResultScene: handle_event(KEYDOWN)
+        ResultScene->>Game: return_to_main()
         Game->>Game: change_scene(MainScene)
         Game->>MainScene: enter(game)
-        MainScene->>MainScene: draw(surface)
         MainScene-->>User: 메인 화면 표시
     end
 ```

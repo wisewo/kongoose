@@ -2,10 +2,10 @@ import csv
 import wave
 from pathlib import Path
 
-from kongoose.game import Game
-from kongoose.models import TerrainType
-from kongoose.scenes import PlayingScene
-from kongoose.stage import Stage
+from src.game import Game
+from src.models import TerrainType
+from src.scenes import PlayingScene
+from src.stage import Stage
 
 
 def test_default_stage_data_files_are_present() -> None:
@@ -568,7 +568,7 @@ def _cluster_start(columns: list[int]) -> int:
 
 
 def _position(row: int, column: int):
-    from kongoose.models import Position
+    from src.models import Position
 
     return Position(row=row, column=column)
 

@@ -1,9 +1,9 @@
 import random
 from dataclasses import dataclass, field
 
-from kongoose import models
-from kongoose.models import Direction, FailureReason, Position, TerrainType
-from kongoose.terrain import TerrainMap
+from src import models
+from src.models import Direction, FailureReason, Position, TerrainType
+from src.terrain import TerrainMap
 
 TURTLE_INTERACTION_PROGRESS = 0.5
 

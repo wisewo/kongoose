@@ -1,5 +1,5 @@
-from kongoose.models import Position
-from kongoose.models import TerrainType as T
+from src.models import Position
+from src.models import TerrainType as T
 
 
 class TerrainMap:

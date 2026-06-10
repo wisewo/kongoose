@@ -1,7 +1,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_SOURCE_DIR = ROOT / "kongoose"
+RUNTIME_SOURCE_DIR = ROOT / "src"
 
 
 def test_runtime_source_line_count_stays_within_guardrail() -> None:

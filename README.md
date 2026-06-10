@@ -1,8 +1,8 @@
-# Kongoose
+# 길Kon너 Goose들
 
-건국대 캠퍼스를 건구스가 건너는 Pygame 기반 격자 이동 게임 프로젝트입니다.
+건국대 캠퍼스를 kongoose(건구스)가 건너는 Pygame 기반 격자 이동 게임 프로젝트입니다.
 
-'길건너 친구들' 변형
+게임 이름은 `길Kon너 Goose들`이고, 플레이어 캐릭터 이름은 `kongoose(건구스)`입니다.
 
 ## 처음 받은 뒤 실행 준비
 
@@ -28,7 +28,7 @@ python -m ruff format --check .
 게임 실행 명령은 구현 골격이 만들어진 뒤 아래 명령을 기준으로 맞춥니다.
 
 ```powershell
-python -m kongoose
+python -m src
 ```
 
 ## 작업 방식

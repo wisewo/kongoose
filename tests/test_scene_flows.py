@@ -6,8 +6,9 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import pytest
 
-from kongoose.game import Game
-from kongoose.models import (
+from src import rendering
+from src.game import Game
+from src.models import (
     MOVE_CLEARED,
     MOVE_FAILED,
     MOVE_MOVED,
@@ -20,7 +21,7 @@ from kongoose.models import (
     SoundCue,
     TerrainType,
 )
-from kongoose.rendering import (
+from src.rendering import (
     BIKE_COLOR,
     DEFAULT_BACKGROUND_COLOR,
     HOP_DURATION,
@@ -33,15 +34,113 @@ from kongoose.rendering import (
     TURTLE_COLOR,
     StageRenderer,
 )
-from kongoose.scenes import (
+from src.scenes import (
     FailedScene,
     MainScene,
     PlayingScene,
     ResultScene,
     StageSelectScene,
 )
-from kongoose.stage import Bike, Player, Stage, StudentCrowd, Turtle
-from kongoose.terrain import TerrainMap
+from src.stage import Bike, Player, Stage, StudentCrowd, Turtle
+from src.terrain import TerrainMap
+
+
+def test_ui_font_prefers_soft_korean_capable_system_font(monkeypatch) -> None:
+    created_fonts = []
+
+    class FontStub:
+        def __init__(self, path, size) -> None:
+            self.path = path
+            self.size = size
+            self.bold = False
+            created_fonts.append(self)
+
+        def set_bold(self, bold) -> None:
+            self.bold = bold
+
+    def match_font(name):
+        paths = {
+            "notosanskr": "C:/Windows/Fonts/NotoSansKR-Regular.otf",
+            "malgungothic": "C:/Windows/Fonts/malgun.ttf",
+        }
+        return paths.get(name)
+
+    monkeypatch.setattr(pygame.font, "match_font", match_font)
+    monkeypatch.setattr(pygame.font, "Font", FontStub)
+
+    font = rendering.get_ui_font(32)
+
+    assert font is created_fonts[0]
+    assert font.path == "C:/Windows/Fonts/NotoSansKR-Regular.otf"
+    assert font.size == 32
+    assert font.bold is True
+
+
+def test_ui_font_falls_back_to_pygame_default_font(monkeypatch) -> None:
+    created_fonts = []
+
+    class FontStub:
+        def __init__(self, path, size) -> None:
+            self.path = path
+            self.size = size
+            self.bold = False
+            created_fonts.append(self)
+
+        def set_bold(self, bold) -> None:
+            self.bold = bold
+
+    monkeypatch.setattr(pygame.font, "match_font", lambda name: None)
+    monkeypatch.setattr(pygame.font, "Font", FontStub)
+
+    font = rendering.get_ui_font(26)
+
+    assert font is created_fonts[0]
+    assert font.path is None
+    assert font.size == 26
+    assert font.bold is True
+
+
+def test_ui_text_rendering_adds_letter_spacing() -> None:
+    pygame.font.init()
+    font = pygame.font.Font(None, 24)
+
+    image = rendering.render_ui_text(font, "AB")
+    expected_width = (
+        font.render("A", True, rendering.TEXT_COLOR).get_width()
+        + font.render("B", True, rendering.TEXT_COLOR).get_width()
+        + rendering.UI_LETTER_SPACING
+    )
+
+    assert rendering.UI_LETTER_SPACING == 6
+    assert image.get_width() == expected_width
+
+
+def test_main_scene_uses_wide_line_spacing(monkeypatch) -> None:
+    pygame.font.init()
+    y_positions = []
+
+    def record_text(_self, _surface, _text, y, _font, _color):
+        y_positions.append(y)
+
+    monkeypatch.setattr(MainScene, "_draw_centered_text", record_text)
+    Game(initial_scene=MainScene()).current_scene.draw(pygame.Surface((960, 720)))
+
+    assert y_positions[2] - y_positions[1] >= 56
+
+
+def test_stage_select_uses_wide_stage_row_spacing(monkeypatch) -> None:
+    pygame.font.init()
+    y_positions = []
+
+    def record_star_line(_self, _surface, _label, _stars, y, _font, _icon_size=30):
+        y_positions.append(y)
+
+    monkeypatch.setattr(StageSelectScene, "_draw_star_line", record_star_line)
+    Game(initial_scene=StageSelectScene()).current_scene.draw(
+        pygame.Surface((960, 720))
+    )
+
+    assert y_positions[1] - y_positions[0] >= 56
 
 
 class ProgressStub:
@@ -559,7 +658,7 @@ def test_student_crowd_sound_plays_on_active_event_without_channel_state() -> No
 
 
 def test_student_crowd_sound_is_not_managed_as_continuous_channel() -> None:
-    from kongoose.stage import StudentCrowd
+    from src.stage import StudentCrowd
 
     game = Game(initial_scene=PlayingScene())
     game.sound_manager = SoundManagerStub()
@@ -908,6 +1007,55 @@ def test_playing_hud_padding_contains_status_lines() -> None:
 
     assert surface.get_at((10, 60))[:3] != DEFAULT_BACKGROUND_COLOR
     assert surface.get_at((10, 100))[:3] == DEFAULT_BACKGROUND_COLOR
+
+
+def test_playing_scene_draw_uses_compact_hud_fonts(monkeypatch) -> None:
+    pygame.font.init()
+    requested_sizes = []
+    get_ui_font = rendering.get_ui_font
+
+    def spy_get_ui_font(size):
+        requested_sizes.append(size)
+        return get_ui_font(size)
+
+    monkeypatch.setattr(rendering, "get_ui_font", spy_get_ui_font)
+    renderer_without_assets().draw(pygame.Surface((420, 240)), StageStub(), 1, "12.5s")
+
+    assert requested_sizes[:2] == [38, 24]
+
+
+def test_playing_hud_status_text_leaves_readable_gap(monkeypatch) -> None:
+    blits = []
+
+    class FakeImage:
+        def __init__(self, text, width) -> None:
+            self.text = text
+            self.width = width
+
+        def get_width(self):
+            return self.width
+
+    class FakeSurface:
+        def get_width(self):
+            return 960
+
+        def blit(self, image, position):
+            blits.append((image.text, position))
+
+    def fake_render(_font, text, _color=rendering.TEXT_COLOR):
+        return FakeImage(text, 210 if text.startswith("Elapsed") else 300)
+
+    monkeypatch.setattr(pygame.draw, "rect", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pygame.draw, "line", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rendering, "render_ui_text", fake_render)
+
+    renderer_without_assets().draw_playing_hud(
+        FakeSurface(), object(), object(), "1", "12.5s"
+    )
+
+    elapsed = next(position for text, position in blits if text.startswith("Elapsed"))
+    controls = next(position for text, position in blits if text.startswith("Arrows"))
+    assert controls[0] >= elapsed[0] + 210 + 36
 
 
 def test_playing_scene_isometric_layout_keeps_player_in_play_area() -> None:

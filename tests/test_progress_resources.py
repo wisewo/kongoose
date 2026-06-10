@@ -3,11 +3,11 @@ import wave
 from inspect import signature
 from pathlib import Path
 
-from kongoose.game import DEFAULT_SOUND_PATHS
-from kongoose.models import SoundCue
-from kongoose.resources import ResourceManager, SoundManager
-from kongoose.storage import Progress, SaveManager
-from kongoose.timing import StarRating, Timer
+from src.game import DEFAULT_SOUND_PATHS
+from src.models import SoundCue
+from src.resources import ResourceManager, SoundManager
+from src.storage import Progress, SaveManager
+from src.timing import StarRating, Timer
 
 
 def test_progress_unlocks_next_stage_and_keeps_best_star_score() -> None:

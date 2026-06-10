@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from kongoose import models, scenes
-from kongoose.models import SoundCue
-from kongoose.resources import ResourceManager, SoundManager
-from kongoose.stage_catalog import build_default_stages
-from kongoose.storage import SaveManager
-from kongoose.timing import StarRating, Timer
+from src import models, scenes
+from src.models import SoundCue
+from src.resources import ResourceManager, SoundManager
+from src.stage_catalog import build_default_stages
+from src.storage import SaveManager
+from src.timing import StarRating, Timer
 
 MAX_STAGE_COUNT = 4
 SOUND_DIR = Path(__file__).resolve().parent.parent / "assets" / "sounds"
@@ -43,7 +43,7 @@ class Game:
     def __init__(
         self,
         window_size=(960, 720),
-        title="Kongoose",
+        title="길Kon너 Goose들",
         initial_scene=None,
         stages=None,
     ):
