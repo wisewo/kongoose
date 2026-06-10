@@ -7,6 +7,17 @@ PLAYER_CELL_INSET = 0.25
 MIN_TILE_SIZE, PLAYING_HUD_HEIGHT = 24, 86
 PLAYING_VIEW_ZOOM = 1.3
 TEXT_COLOR = (35, 45, 50)
+UI_LETTER_SPACING = 6
+KOREAN_FONT_NAMES = (
+    "notosanskr",
+    "malgungothicsemilight",
+    "malgungothic",
+    "applegothic",
+    "nanumgothic",
+    "notosanscjkkr",
+    "gulim",
+    "batang",
+)
 HUD_OVERLAY_COLOR = (246, 250, 244, 224)
 HUD_BORDER_COLOR = (182, 202, 185, 230)
 DEFAULT_BACKGROUND_COLOR = (242, 247, 241)
@@ -50,6 +61,33 @@ def trim_transparent_margins(image):
     )
 
 
+def get_ui_font(size: int):
+    for font_name in KOREAN_FONT_NAMES:
+        if font_path := pygame.font.match_font(font_name):
+            break
+    else:
+        font_path = None
+    font = pygame.font.Font(font_path, size)
+    font.set_bold(True)
+    return font
+
+
+def render_ui_text(font, text, color=TEXT_COLOR):
+    glyphs = [font.render(character, True, color) for character in text]
+    if not glyphs:
+        return font.render(text, True, color)
+    width = sum(glyph.get_width() for glyph in glyphs)
+    width += UI_LETTER_SPACING * (len(glyphs) - 1)
+    image = pygame.Surface(
+        (width, max(glyph.get_height() for glyph in glyphs)), pygame.SRCALPHA
+    )
+    x = 0
+    for glyph in glyphs:
+        image.blit(glyph, (x, 0))
+        x += glyph.get_width() + UI_LETTER_SPACING
+    return image
+
+
 class StageRenderer:
     def __init__(self, get_asset_image) -> None:
         self._get_asset_image = get_asset_image
@@ -67,8 +105,8 @@ class StageRenderer:
         terrain_map, player = stage.terrain_map, stage.player
         surface.fill(background_color)
         width, height = surface.get_size()
-        title_font = pygame.font.Font(None, 44)
-        body_font = pygame.font.Font(None, 26)
+        title_font = get_ui_font(38)
+        body_font = get_ui_font(24)
         grid, cell_size = self.calculate_grid_layout(
             width,
             max(1, height - PLAYING_HUD_HEIGHT),
@@ -116,13 +154,15 @@ class StageRenderer:
         pygame.draw.line(
             surface, HUD_BORDER_COLOR, hud_rect.bottomleft, hud_rect.bottomright
         )
-        title_image = title_font.render(f"Stage {stage_text}", True, TEXT_COLOR)
+        title_image = render_ui_text(title_font, f"Stage {stage_text}")
         surface.blit(title_image, (18, 12))
-        for text, position in (
-            (f"Elapsed: {elapsed_text}", (20, 54)),
-            ("Arrows: Move   Esc / B: Stage Select", (220, 54)),
-        ):
-            surface.blit(body_font.render(text, True, TEXT_COLOR), position)
+        elapsed_image = render_ui_text(body_font, f"Elapsed: {elapsed_text}")
+        surface.blit(elapsed_image, (20, 54))
+        controls_x = 20 + elapsed_image.get_width() + 36
+        surface.blit(
+            render_ui_text(body_font, "Arrows: Move   Esc / B: Stage Select"),
+            (controls_x, 54),
+        )
 
     def calculate_grid_layout(self, width, height, rows, columns, focus=None):
         columns = max(1, columns)

@@ -9,6 +9,8 @@ from src.rendering import (
     TEXT_COLOR,
     StageRenderer,
     blit_scaled_centered,
+    get_ui_font,
+    render_ui_text,
 )
 
 MAX_STAGE_COUNT = 4
@@ -31,7 +33,7 @@ CAMERA_FOLLOW_SPEED = 8.0
 
 
 def _fonts(*sizes: int):
-    return tuple(pygame.font.Font(None, size) for size in sizes)
+    return tuple(get_ui_font(size) for size in sizes)
 
 
 class EmptyScene:
@@ -84,13 +86,13 @@ class EmptyScene:
         self._dispatch_key(event, *bindings)
 
     def _draw_centered_text(self, surface, text: str, y: int, font, color) -> None:
-        image = font.render(text, True, color)
+        image = render_ui_text(font, text, color)
         surface.blit(image, image.get_rect(center=(surface.get_width() // 2, y)))
 
     def _draw_centered_lines(self, surface, lines, y, font, color=TEXT_COLOR):
         for line in lines:
             self._draw_centered_text(surface, line, y, font, color)
-            y += 38
+            y += 58
         return y
 
     def _draw_message(self, surface, y: int, font) -> None:
@@ -110,7 +112,7 @@ class EmptyScene:
 
     def _draw_star_line(self, surface, label, stars, y, font, icon_size=STAR_ICON_SIZE):
         stars = max(0, min(3, stars))
-        label_image = font.render(label, True, TEXT_COLOR)
+        label_image = render_ui_text(font, label)
         images = [
             self._get_asset_image(
                 STAR_FILLED_IMAGE if index < stars else STAR_EMPTY_IMAGE
@@ -121,12 +123,16 @@ class EmptyScene:
         has_icons = all(images)
         stars_text = "*" * stars or "-"
         rating_width = (
-            icon_size * 3 + STAR_ICON_GAP * 2 if has_icons else font.size(stars_text)[0]
+            icon_size * 3 + STAR_ICON_GAP * 2
+            if has_icons
+            else render_ui_text(font, stars_text).get_width()
         )
         left = (surface.get_width() - label_image.get_width() - gap - rating_width) // 2
         label_rect = label_image.get_rect(midleft=(left, y))
         surface.blit(label_image, label_rect)
-        rating_left = label_rect.right + gap
+        rating_left = min(
+            label_rect.right + gap, surface.get_width() - rating_width - gap
+        )
         if has_icons:
             for index, image in enumerate(images):
                 target = pygame.Rect(
@@ -137,7 +143,7 @@ class EmptyScene:
                 )
                 blit_scaled_centered(surface, image, target)
             return
-        rating_image = font.render(stars_text, True, TEXT_COLOR)
+        rating_image = render_ui_text(font, stars_text)
         surface.blit(rating_image, rating_image.get_rect(midleft=(rating_left, y)))
 
 
@@ -185,7 +191,7 @@ class StageSelectScene(EmptyScene):
         self._draw_centered_text(
             surface, "Choose a stage with number keys.", y, body_font, TEXT_COLOR
         )
-        y += 76
+        y += 100
         for stage_id in range(1, MAX_STAGE_COUNT + 1):
             status = "Unlocked" if progress.is_stage_unlocked(stage_id) else "Locked"
             self._draw_star_line(
@@ -196,8 +202,8 @@ class StageSelectScene(EmptyScene):
                 body_font,
                 24,
             )
-            y += 38
-        y += 38
+            y += 58
+        y += 58
         y = self._draw_centered_lines(
             surface, ("1-4: Select Stage", "Esc / B: Main"), y, body_font
         )
