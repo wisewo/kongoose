@@ -443,6 +443,37 @@ def test_playing_scene_draws_stage_specific_goal_image_when_registered() -> None
     assert (30, 220, 80) not in rendered_colors
 
 
+def test_renderer_uses_wide_goal_image_for_3x2_goal_area() -> None:
+    surface = pygame.Surface((320, 220))
+    terrain = TerrainMap(
+        [
+            [TerrainType.GOAL, TerrainType.GOAL, TerrainType.GOAL],
+            [TerrainType.GOAL, TerrainType.GOAL, TerrainType.GOAL],
+        ]
+    )
+    requested_images = []
+    old_goal_image = pygame.Surface((16, 16), pygame.SRCALPHA)
+    old_goal_image.fill((220, 20, 20, 255))
+    wide_goal_image = pygame.Surface((48, 32), pygame.SRCALPHA)
+    wide_goal_image.fill((40, 210, 90, 255))
+
+    def get_asset_image(image_name: str):
+        requested_images.append(image_name)
+        return {
+            "goal_stage_2": old_goal_image,
+            "goal_stage_2_3x2": wide_goal_image,
+        }.get(image_name)
+
+    renderer = StageRenderer(get_asset_image)
+    renderer.draw_terrain_grid(surface, terrain, pygame.Rect(80, 20, 200, 120), 80, 2)
+    rendered_colors = collect_surface_colors(surface)
+
+    assert "goal_stage_2_3x2" in requested_images
+    assert requested_images.count("goal_stage_2") == 0
+    assert (40, 210, 90) in rendered_colors
+    assert (220, 20, 20) not in rendered_colors
+
+
 def test_start_stage_plays_fixed_ambience_for_stage() -> None:
     game = Game()
     game.sound_manager = SoundManagerStub()
