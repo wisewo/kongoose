@@ -1019,9 +1019,7 @@ def test_playing_scene_draw_uses_compact_hud_fonts(monkeypatch) -> None:
         return get_ui_font(size)
 
     monkeypatch.setattr(rendering, "get_ui_font", spy_get_ui_font)
-    renderer_without_assets().draw(
-        pygame.Surface((420, 240)), StageStub(), 1, "12.5s"
-    )
+    renderer_without_assets().draw(pygame.Surface((420, 240)), StageStub(), 1, "12.5s")
 
     assert requested_sizes[:2] == [38, 24]
 
